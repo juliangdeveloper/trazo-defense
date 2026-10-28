@@ -1,5 +1,5 @@
 export const APP_ID = "trazo-defense";
-export const APP_VERSION = "0.1.7";
+export const APP_VERSION = "0.1.8";
 export const SAVE_KEY = "trazo-defense.save";
 export const SAVE_VERSION = 1;
 export const CACHE_PREFIX = "trazo-defense-";
@@ -15,13 +15,13 @@ export const TECNICAS = Object.freeze([TECNICA.LINEA, TECNICA.ELIPSE, TECNICA.PE
 export const TORRE = Object.freeze({
   [TECNICA.LINEA]: Object.freeze({ nombre: "Torre de línea", corto: "Línea", danoBase: 24, leccion: "Drawabox 1 · Líneas" }),
   [TECNICA.ELIPSE]: Object.freeze({ nombre: "Torre de elipse", corto: "Elipse", danoBase: 30, leccion: "Drawabox 1 · Elipses" }),
-  [TECNICA.PERSPECTIVA]: Object.freeze({ nombre: "Torre de perspectiva", corto: "Perspectiva", danoBase: 36, leccion: "Drawabox 1 · Cajas" }),
+  [TECNICA.PERSPECTIVA]: Object.freeze({ nombre: "Torre de perspectiva", corto: "Perspectiva", danoBase: 60, leccion: "Drawabox 1 · Cajas" }),
 });
 
 export const METRICA_PRINCIPAL = Object.freeze({
   [TECNICA.LINEA]: Object.freeze({ clave: "desviacion_pct", etiqueta: "Desviación media", unidad: "%" }),
   [TECNICA.ELIPSE]: Object.freeze({ clave: "ajuste_pct", etiqueta: "Error de ajuste medio", unidad: "%" }),
-  [TECNICA.PERSPECTIVA]: Object.freeze({ clave: "desvio_deg", etiqueta: "Desvío medio al punto de fuga", unidad: "°" }),
+  [TECNICA.PERSPECTIVA]: Object.freeze({ clave: "desvio_deg", etiqueta: "Convergencia al punto de fuga", unidad: "°" }),
 });
 
 export const PUNTAJE = Object.freeze({
@@ -39,7 +39,8 @@ export const PUNTAJE = Object.freeze({
   ELIPSE_MUESTRAS: 64,
   PERSPECTIVA_DESVIO_MAX_DEG: 8,
   PERSPECTIVA_RECTITUD_MAX_PCT: 8,
-  PERSPECTIVA_INICIO_MAX_PCT: 20,
+  PERSPECTIVA_CIERRE_MAX_PCT: 25,
+  CUBO_LINEAS: 3,
   TRAZO_MIN_PX: 20,
   FALLO_BAJO: 0.15,
 });
@@ -133,14 +134,8 @@ export const MONSTRUO = Object.freeze({
 });
 
 export const CAMINO = Object.freeze([
-  [0.14, -0.05], [0.14, 0.12], [0.86, 0.12], [0.86, 0.5], [0.5, 0.5], [0.5, 0.9],
+  [0.14, -0.05], [0.14, 0.12], [0.86, 0.12], [0.86, 0.42], [0.3, 0.42], [0.3, 0.66], [0.88, 0.66], [0.88, 0.9],
 ]);
-
-export const POSICION_TORRE = Object.freeze({
-  [TECNICA.LINEA]: Object.freeze([0.13, 0.9]),
-  [TECNICA.ELIPSE]: Object.freeze([0.3, 0.9]),
-  [TECNICA.PERSPECTIVA]: Object.freeze([0.7, 0.9]),
-});
 
 export const PANTALLA = Object.freeze({
   JUGAR: "jugar",
@@ -161,13 +156,14 @@ export const FASE_PUNTOS = Object.freeze([
   Object.freeze({ texto: "Campo con camino, monstruos, base y oleadas", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Torre de línea medida: desviación, extremos, seguridad y repasos", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Torre de elipse medida: ajuste, cierre, temblor y cobertura", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Torre de perspectiva medida en grados hacia el punto de fuga", estado: PUNTO_FASE.HECHO }),
+  Object.freeze({ texto: "Torre de perspectiva: cierras un cubo con 3 líneas hacia el punto de fuga, medidas en grados", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Jefe con 4 puntos débiles y metas que suben con tu nivel", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Nivel por técnica desde promedios móviles, no por horas jugadas", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Curva de progreso por día y mínimos del capítulo 1", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Bonus de tinta en la primera oleada de cada día, sin rachas", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Las 3 torres desde el inicio y oleadas que mezclan técnicas", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Mejoras de torre con tinta: más daño o más objetivos, sin quitarle peso al trazo", estado: PUNTO_FASE.HECHO }),
+  Object.freeze({ texto: "Las torres están en el campo: cada una muestra su mejora, se compra con su + y cambia de aspecto con el nivel", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Campo vertical: los monstruos bajan hacia tu cuaderno y dibujas sobre el campo, entre ellos y la base", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Cámara lenta mientras dibujas y cola con los próximos ejercicios", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Tutorial inicial que se puede repetir", estado: PUNTO_FASE.HECHO }),

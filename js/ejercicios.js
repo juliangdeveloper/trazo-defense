@@ -4,10 +4,14 @@ const MARGEN = 0.1;
 const LINEA_LARGO = Object.freeze([0.5, 0.78]);
 const ELIPSE_ANCHO = Object.freeze([0.38, 0.72]);
 const ELIPSE_ALTO = Object.freeze([0.32, 0.62]);
-const HORIZONTE_ALTO = Object.freeze([0.16, 0.3]);
-const FUGA_ANCHO = Object.freeze([0.3, 0.7]);
-const PERSPECTIVA_GUIA = 0.6;
-const PERSPECTIVA_DISTANCIA_MIN = 0.5;
+const HORIZONTE_ALTO = Object.freeze([0.05, 0.14]);
+const FUGA_ANCHO = Object.freeze([0.38, 0.62]);
+const CUBO_LADO = Object.freeze([0.3, 0.4]);
+const CUBO_FONDO = Object.freeze([0.42, 0.56]);
+const CUBO_SEPARACION = 0.12;
+const CUBO_BAJO_HORIZONTE = 0.2;
+const CUBO_ARISTA_MIN = 0.2;
+const CUBO_INTENTOS = 30;
 const JEFE_FUGA = Object.freeze([0.5, 0.34]);
 const RESERVA_MAX = 0.4;
 
@@ -38,16 +42,48 @@ export function ejercicioElipse(w, h, rng = Math.random) {
   return { tecnica: TECNICA.ELIPSE, caja: { x, y, w: cw, h: ch } };
 }
 
+function hacia(p, q, f) {
+  return { x: p.x + (q.x - p.x) * f, y: p.y + (q.y - p.y) * f };
+}
+
+export function aristasCubo(ej) {
+  return ej.visibles.map((i) => ({ esquina: i, desde: ej.frente[i], hasta: ej.fondo[i] }));
+}
+
+function cuboAlAzar(w, h, rng) {
+  const horizonte = h * entre(rng, HORIZONTE_ALTO);
+  const fuga = { x: w * entre(rng, FUGA_ANCHO), y: horizonte };
+  const altoLibre = h * (1 - MARGEN) - horizonte - h * CUBO_BAJO_HORIZONTE;
+  const sep = w * CUBO_SEPARACION;
+  const lado = Math.max(24, Math.min(Math.min(w, h) * entre(rng, CUBO_LADO), altoLibre, Math.max(fuga.x, w - fuga.x) - sep - w * MARGEN));
+  const libreIzq = fuga.x - sep - lado - w * MARGEN;
+  const libreDer = w * (1 - MARGEN) - lado - fuga.x - sep;
+  let izquierda = rng() < 0.5;
+  if (izquierda && libreIzq < 0) izquierda = false;
+  else if (!izquierda && libreDer < 0) izquierda = true;
+  const x = izquierda ? w * MARGEN + Math.max(0, libreIzq) * rng() : fuga.x + sep + Math.max(0, libreDer) * rng();
+  const yMin = horizonte + h * CUBO_BAJO_HORIZONTE;
+  const yMax = h * (1 - MARGEN) - lado;
+  const y = yMax > yMin ? yMin + rng() * (yMax - yMin) : Math.max(horizonte + 12, yMax);
+  const frente = [{ x, y }, { x: x + lado, y }, { x: x + lado, y: y + lado }, { x, y: y + lado }];
+  const fondoF = entre(rng, CUBO_FONDO);
+  const fondo = frente.map((p) => hacia(p, fuga, fondoF));
+  const oculta = izquierda ? 3 : 2;
+  const visibles = [0, 1, 2, 3].filter((i) => i !== oculta);
+  return { tecnica: TECNICA.PERSPECTIVA, fuga, frente, fondo, visibles, hechos: [] };
+}
+
+function aristaMinima(ej) {
+  return Math.min(...aristasCubo(ej).map((a) => Math.hypot(a.hasta.x - a.desde.x, a.hasta.y - a.desde.y)));
+}
+
 export function ejercicioPerspectiva(w, h, rng = Math.random) {
-  const fuga = { x: entre(rng, FUGA_ANCHO) * w, y: entre(rng, HORIZONTE_ALTO) * h };
-  let origen = null;
-  for (let i = 0; i < 20 && !origen; i++) {
-    const p = { x: w * MARGEN + rng() * w * (1 - 2 * MARGEN), y: fuga.y + h * 0.25 + rng() * (h * (1 - MARGEN) - fuga.y - h * 0.25) };
-    if (Math.hypot(p.x - fuga.x, p.y - fuga.y) >= PERSPECTIVA_DISTANCIA_MIN * Math.min(w, h)) origen = p;
+  let mejor = cuboAlAzar(w, h, rng);
+  for (let i = 0; i < CUBO_INTENTOS && aristaMinima(mejor) < CUBO_ARISTA_MIN * Math.min(w, h); i++) {
+    const otro = cuboAlAzar(w, h, rng);
+    if (aristaMinima(otro) > aristaMinima(mejor)) mejor = otro;
   }
-  if (!origen) origen = { x: w * MARGEN, y: h * (1 - MARGEN) };
-  const largoGuia = Math.hypot(fuga.x - origen.x, fuga.y - origen.y) * PERSPECTIVA_GUIA;
-  return { tecnica: TECNICA.PERSPECTIVA, fuga, origen, largoGuia };
+  return mejor;
 }
 
 function bajar(p, dy) {
@@ -57,7 +93,7 @@ function bajar(p, dy) {
 export function desplazarEjercicio(ej, dy) {
   if (!dy) return ej;
   if (ej.tecnica === TECNICA.ELIPSE) return { ...ej, caja: bajar(ej.caja, dy) };
-  if (ej.tecnica === TECNICA.PERSPECTIVA) return { ...ej, fuga: bajar(ej.fuga, dy), origen: bajar(ej.origen, dy) };
+  if (ej.tecnica === TECNICA.PERSPECTIVA) return { ...ej, fuga: bajar(ej.fuga, dy), frente: ej.frente.map((p) => bajar(p, dy)), fondo: ej.fondo.map((p) => bajar(p, dy)) };
   return { ...ej, a: bajar(ej.a, dy), b: bajar(ej.b, dy) };
 }
 

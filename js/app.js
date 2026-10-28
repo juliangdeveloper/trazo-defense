@@ -1,15 +1,15 @@
 import {
-  APP_ID, APP_VERSION, SAVE_KEY, TECNICA, TECNICAS, TORRE, METRICA_PRINCIPAL, POSICION_TORRE, CAMINO,
+  APP_ID, APP_VERSION, SAVE_KEY, TECNICA, TECNICAS, TORRE, METRICA_PRINCIPAL, CAMINO, PUNTAJE,
   JEFE, COMPARA, PANTALLA, MODO, FASE_PUNTOS, PUNTO_FASE, FASES_NOMBRE, ESTADOS_NOMBRE, TIPOS_NOMBRE, TOTAL_FASES, OLEADA, MEJORA, CAMARA_LENTA, ZONA_DIBUJO, COLA,
 } from "./config.js";
 import { PROYECTO, FASE, metaProyecto, metaUpdate, metaRead, crearEscritor } from "./meta.js";
-import { evaluarLinea, evaluarElipse, evaluarPerspectiva, evaluarJefe, clasificarTrazosJefe, faltantesJefe, metaPuntoDebil, TIPO_TRAZO_JEFE } from "./geometry.js";
+import { evaluarLinea, evaluarElipse, evaluarFugante, asignarArista, resumenCubo, evaluarJefe, clasificarTrazosJefe, faltantesJefe, metaPuntoDebil, TIPO_TRAZO_JEFE } from "./geometry.js";
 import {
   STATS, cargar, guardar, registrarTrazo, promedioMovil, nivelTecnica, nivelJugador, minimosCapitulo, jefeDesbloqueado,
   tecnicaMasDebil, costoMejora, puedeMejorar, mejorarTorre, completarSesion, registrarOleada, registrarJefe, curva, statsMeta, logrosDe,
 } from "./progress.js";
 import { crearOleada, actualizarOleada, objetivoPrincipal, elegirObjetivo, puntoEnCamino, danoDeTrazo, atacar, tipoMonstruo, efectoMejora, proximasTecnicas } from "./game.js";
-import { crearEjercicio, escenaJefe } from "./ejercicios.js";
+import { crearEjercicio, escenaJefe, aristasCubo } from "./ejercicios.js";
 import { crearTutorial, ACCION_TUTORIAL } from "./tutorial.js";
 
 const COLOR = Object.freeze({
@@ -33,7 +33,6 @@ const TEXTO_FLOTANTE_MS = 900;
 const TOAST_MS = 3200;
 const DT_MAX_MS = 50;
 const CURVA_DIAS = 30;
-const RADIO_TORRE = 15;
 const CAMPO_BASE = Object.freeze({ W: 350, H: 480, ESCALA_MAX: 1.8 });
 const AVISO_MEJORA_MS = 1600;
 
@@ -128,6 +127,8 @@ const campoWrap = $("#campo-wrap");
 const zonaDibujo = $("#pad-wrap");
 zonaDibujo.style.top = `${ZONA_DIBUJO.ARRIBA * 100}%`;
 zonaDibujo.style.height = `${(ZONA_DIBUJO.ABAJO - ZONA_DIBUJO.ARRIBA) * 100}%`;
+const torresEl = $("#torres");
+torresEl.style.top = `${ZONA_DIBUJO.ABAJO * 100}%`;
 const pad = $("#pad");
 const jefePad = $("#jefe-pad");
 let tamCampo = ajustarCanvas(campo);
@@ -136,7 +137,12 @@ let tamJefe = { ctx: jefePad.getContext("2d"), w: 1, h: 1 };
 
 function pintarTinta() {
   $("#tinta-valor").textContent = String(Math.round(estado.tinta));
-  for (const b of document.querySelectorAll("[data-mejorar]")) b.disabled = !puedeMejorar(estado, b.dataset.mejorar);
+  refrescarCompra();
+}
+
+function cuboEnCurso() {
+  const ej = ui.ejercicio;
+  return Boolean(ej && ej.tecnica === TECNICA.PERSPECTIVA && ej.hechos.length > 0 && ej.hechos.length < PUNTAJE.CUBO_LINEAS);
 }
 
 function tecnicaPedida() {
@@ -153,15 +159,17 @@ function seguirMonstruo() {
   pintarTorres();
 }
 
-function nuevoEjercicio() {
-  if (ui.trazo) return;
+function nuevoEjercicio(forzar = false) {
+  if (ui.trazo || (!forzar && cuboEnCurso())) return;
   seguirMonstruo();
+  ui.ejercicio = null;
   pintarPista();
   pintarCola();
   const cabeza = $("#zona-cabeza");
   const arriba = cabeza.offsetTop + cabeza.offsetHeight + MARGEN_PISTA;
   ui.ejercicio = crearEjercicio(ui.tecnica, tamPad.w, tamPad.h, Math.random, arriba);
   pad.dataset.ejercicio = JSON.stringify(ui.ejercicio);
+  pintarPista();
   pintarPad();
 }
 
@@ -170,9 +178,10 @@ function pintarPista() {
   const textos = {
     [TECNICA.LINEA]: "Une los dos puntos en un solo trazo seguro.",
     [TECNICA.ELIPSE]: "Elipse que toque los 4 lados de la caja y cierre.",
-    [TECNICA.PERSPECTIVA]: "Desde el punto negro, recta hacia el punto de fuga.",
+    [TECNICA.PERSPECTIVA]: "Cierra el cubo: 3 rectas de las esquinas negras hacia el punto de fuga.",
   };
   let texto = textos[ui.tecnica];
+  if (ui.tecnica === TECNICA.PERSPECTIVA) texto += ` ${ui.ejercicio && ui.ejercicio.tecnica === TECNICA.PERSPECTIVA ? ui.ejercicio.hechos.length : 0}/${PUNTAJE.CUBO_LINEAS}.`;
   if (ui.modo === MODO.LIBRE && !tutorial.activo()) texto += " Sin oleada: práctica.";
   pista.textContent = texto;
 }
@@ -180,7 +189,7 @@ function pintarPista() {
 const ICONO_TECNICA = Object.freeze({
   [TECNICA.LINEA]: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18L19 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
   [TECNICA.ELIPSE]: '<svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="8.5" ry="5.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>',
-  [TECNICA.PERSPECTIVA]: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18L12 6L20 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  [TECNICA.PERSPECTIVA]: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10h9v9H4zM4 10l5-5h9l-5 5M13 19l5-5V5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
 });
 
 function colaActual() {
@@ -246,28 +255,54 @@ function pintarEjercicio(ctx, ej, mostrarIdeal) {
       ctx.setLineDash([]);
     }
   } else if (ej.tecnica === TECNICA.PERSPECTIVA) {
-    ctx.strokeStyle = COLOR.TENUE;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, ej.fuga.y);
-    ctx.lineTo(tamPad.w, ej.fuga.y);
-    ctx.stroke();
-    ctx.fillStyle = COLOR.TENUE;
-    ctx.font = "11px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "right";
-    ctx.textBaseline = "top";
-    ctx.fillText("horizonte", tamPad.w - 8, ej.fuga.y + 5);
-    ctx.textAlign = "start";
-    ctx.textBaseline = "alphabetic";
-    if (mostrarIdeal) {
-      ctx.setLineDash([6, 6]);
-      trazar(ctx, [ej.origen, ej.fuga], COLOR.GUIA, 2);
-      ctx.setLineDash([]);
-    }
-    punto(ctx, ej.fuga, 12, "rgba(192,69,58,0.14)");
-    punto(ctx, ej.fuga, 5, COLOR.MAL);
-    punto(ctx, ej.origen, 6, COLOR.TINTA);
+    pintarCubo(ctx, ej, mostrarIdeal);
   }
+}
+
+function colorPuntaje(p) {
+  return p >= 0.7 ? COLOR.BIEN : p < 0.4 ? COLOR.MAL : COLOR.TINTA;
+}
+
+function pintarCubo(ctx, ej, mostrarIdeal) {
+  ctx.strokeStyle = COLOR.TENUE;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, ej.fuga.y);
+  ctx.lineTo(tamPad.w, ej.fuga.y);
+  ctx.stroke();
+  ctx.fillStyle = COLOR.TENUE;
+  ctx.font = "11px -apple-system, system-ui, sans-serif";
+  ctx.textAlign = ej.fuga.x > tamPad.w / 2 ? "left" : "right";
+  ctx.textBaseline = "top";
+  ctx.fillText("horizonte", ej.fuga.x > tamPad.w / 2 ? 8 : tamPad.w - 8, ej.fuga.y + 4);
+  ctx.textAlign = "start";
+  ctx.textBaseline = "alphabetic";
+  const aristas = aristasCubo(ej);
+  if (mostrarIdeal) {
+    ctx.setLineDash([5, 6]);
+    for (const a of aristas) trazar(ctx, [a.desde, ej.fuga], COLOR.GUIA, 1.5);
+    ctx.setLineDash([]);
+  }
+  ctx.strokeStyle = COLOR.TINTA;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ej.frente.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+  ctx.closePath();
+  ctx.stroke();
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4;
+    if (ej.visibles.includes(i) && ej.visibles.includes(j)) trazar(ctx, [ej.fondo[i], ej.fondo[j]], COLOR.TINTA, 2);
+  }
+  const hechas = ej.hechos.map((x) => x.arista);
+  aristas.forEach((a, i) => {
+    if (hechas.includes(i)) return;
+    punto(ctx, a.desde, 4.5, COLOR.TINTA);
+    punto(ctx, a.hasta, 4, COLOR.TINTA, false);
+  });
+  for (const x of ej.hechos) trazar(ctx, x.puntos, colorPuntaje(x.r.puntaje), 3);
+  punto(ctx, ej.fuga, 12, "rgba(192,69,58,0.14)");
+  punto(ctx, ej.fuga, 5, COLOR.MAL);
 }
 
 function pintarPad() {
@@ -341,8 +376,7 @@ function crearMarca(r, dano, golpes, fin, tecnica) {
 
 function evaluar(ej, puntos) {
   if (ej.tecnica === TECNICA.LINEA) return evaluarLinea(puntos, ej.a, ej.b);
-  if (ej.tecnica === TECNICA.ELIPSE) return evaluarElipse(puntos, ej.caja);
-  return evaluarPerspectiva(puntos, ej.origen, ej.fuga, ej.largoGuia);
+  return evaluarElipse(puntos, ej.caja);
 }
 
 function chip(etiqueta, valor, clase) {
@@ -361,14 +395,18 @@ function pintarLectura(r, dano) {
   } else if (r.ajuste_pct !== undefined) {
     el.append(chip("Ajuste", `${fmt(r.ajuste_pct)}%`), chip("Cierre", `${fmt(r.cierre_pct)}%`), chip("Temblor", `${fmt(r.temblor_deg)}°`), chip("Vuelta", `${r.cobertura_deg}°`, r.cobertura_deg < 330 ? "mal" : ""));
   } else {
-    el.append(chip("Desvío", `${fmt(r.desvio_deg)}°`), chip("Rectitud", `${fmt(r.rectitud_pct)}%`), chip("Inicio", `${fmt(r.inicio_pct)}%`), chip("Repasos", String(r.repasos), r.repasos ? "mal" : ""));
+    if (r.linea) el.append(chip("Línea", `${r.linea}/${PUNTAJE.CUBO_LINEAS}`));
+    el.append(chip("Convergencia", `${fmt(r.desvio_deg)}°`, r.desvio_deg > PUNTAJE.PERSPECTIVA_DESVIO_MAX_DEG / 2 ? "mal" : ""), chip("Rectitud", `${fmt(r.rectitud_pct)}%`), chip("Cierre", `${fmt(r.cierre_pct)}%`), chip("Repasos", String(r.repasos), r.repasos ? "mal" : ""));
   }
   if (dano !== null) el.append(chip(dano > 0 ? "Daño" : "Sin", dano > 0 ? String(dano) : "daño", dano > 0 ? "dano" : "mal"));
 }
 
 function posTorre(t) {
-  const [x, y] = POSICION_TORRE[t];
-  return { x: x * tamCampo.w, y: y * tamCampo.h };
+  const el = torresEl.querySelector(`.torre-btn[data-tecnica="${t}"]`);
+  if (!el) return { x: tamCampo.w / 2, y: tamCampo.h };
+  const base = campo.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2 - base.left, y: r.top + Math.min(r.height, r.width) / 2 - base.top };
 }
 
 function posMonstruo(m) {
@@ -376,34 +414,90 @@ function posMonstruo(m) {
   return { x: x * tamCampo.w, y: y * tamCampo.h };
 }
 
+function golpear(tecnica, puntaje) {
+  const mejora = estado.mejoras[tecnica];
+  const dano = danoDeTrazo(tecnica, puntaje, mejora);
+  const objetivo = elegirObjetivo(ui.oleada, ui.objetivoBloqueado, tecnica);
+  if (objetivo && dano <= 0) {
+    const destino = posMonstruo(objetivo);
+    ui.textos.push({ x: destino.x, y: destino.y - 18 * escalaCampo(), texto: "fallo", inicio: performance.now(), color: COLOR.MAL });
+    return { dano, golpes: 0 };
+  }
+  if (!objetivo) return { dano, golpes: 0 };
+  const golpe = atacar(ui.oleada, dano, efectoMejora(mejora).objetivos, objetivo);
+  for (const g of golpe.golpes) {
+    const destino = posMonstruo(g.objetivo);
+    ui.proyectiles.push({ desde: posTorre(tecnica), hasta: destino, inicio: performance.now() });
+    ui.textos.push({ x: destino.x, y: destino.y - 18 * escalaCampo(), texto: `−${dano}`, inicio: performance.now(), color: COLOR.TINTA });
+    if (g.vencido) ui.textos.push({ x: destino.x, y: destino.y + 6 * escalaCampo(), texto: `+${OLEADA.TINTA_POR_MONSTRUO}`, inicio: performance.now(), color: COLOR.ACENTO });
+  }
+  return { dano, golpes: golpe.golpes.length };
+}
+
+function enOleada() {
+  return ui.modo === MODO.OLEADA && ui.oleada && !ui.oleada.terminada;
+}
+
+function terminarTrazoCubo(ej, puntos) {
+  const aristas = aristasCubo(ej);
+  const usadas = ej.hechos.map((x) => x.arista);
+  const indice = asignarArista(puntos, aristas, usadas);
+  const r = indice >= 0 ? evaluarFugante(puntos, aristas[indice], ej.fuga) : { valido: false, puntaje: 0 };
+  const enTutorial = tutorial.activo();
+  const fin = puntos[puntos.length - 1];
+  if (!r.valido) {
+    crearMarca(r, null, 0, fin, ej.tecnica);
+    pintarLectura(r, null);
+    if (!cuboEnCurso()) ui.objetivoBloqueado = null;
+    pintarPad();
+    pintarHud();
+    return;
+  }
+  ej.hechos.push({ puntos, arista: indice, r });
+  pad.dataset.ejercicio = JSON.stringify(ej);
+  if (!enTutorial) { registrarTrazo(estado, ej.tecnica, r, new Date()); persistir(); }
+  const n = ej.hechos.length;
+  if (n < PUNTAJE.CUBO_LINEAS) {
+    ui.marca = { x: fin.x, y: fin.y, grande: `${n}/${PUNTAJE.CUBO_LINEAS}`, extra: "", chico: `Convergencia ${fmt(r.desvio_deg)}° · ${Math.round(r.puntaje * 100)}%`, color: colorPuntaje(r.puntaje), inicio: performance.now() };
+    pintarLectura({ ...r, linea: n }, null);
+    pintarPista();
+    ui.bloqueoHasta = performance.now();
+    pintarPad();
+    pintarHud();
+    return;
+  }
+  const total = resumenCubo(ej.hechos.map((x) => x.r));
+  let dano = null;
+  let golpes = 0;
+  if (!enTutorial && enOleada()) ({ dano, golpes } = golpear(ej.tecnica, total.puntaje));
+  if (!enTutorial) pintarTorres();
+  ui.objetivoBloqueado = null;
+  crearMarca(total, dano, golpes, fin, ej.tecnica);
+  pintarLectura(total, dano);
+  pintarPista();
+  ui.feedback = { ejercicio: ej, trazo: null, color: colorPuntaje(total.puntaje) };
+  ui.bloqueoHasta = performance.now() + FEEDBACK_MS * 1.5;
+  pintarPad();
+  setTimeout(siguienteEjercicio, FEEDBACK_MS * 1.5);
+  pintarHud();
+}
+
 function terminarTrazo(puntos) {
   const ej = ui.ejercicio;
   ui.trazo = null;
   if (!ej) return;
+  if (ej.tecnica === TECNICA.PERSPECTIVA) {
+    terminarTrazoCubo(ej, puntos);
+    if (ui.redimPendiente) { ui.redimPendiente = false; redimensionar(); }
+    return;
+  }
   const r = evaluar(ej, puntos);
   let dano = null;
   let golpes = 0;
   const enTutorial = tutorial.activo();
   if (r.valido && !enTutorial) {
     registrarTrazo(estado, ej.tecnica, r, new Date());
-    if (ui.modo === MODO.OLEADA && ui.oleada && !ui.oleada.terminada) {
-      const mejora = estado.mejoras[ej.tecnica];
-      dano = danoDeTrazo(ej.tecnica, r.puntaje, mejora);
-      const objetivo = elegirObjetivo(ui.oleada, ui.objetivoBloqueado, ej.tecnica);
-      if (objetivo && dano <= 0) {
-        const destino = posMonstruo(objetivo);
-        ui.textos.push({ x: destino.x, y: destino.y - 18 * escalaCampo(), texto: "fallo", inicio: performance.now(), color: COLOR.MAL });
-      } else if (objetivo) {
-        const golpe = atacar(ui.oleada, dano, efectoMejora(mejora).objetivos, objetivo);
-        golpes = golpe.golpes.length;
-        for (const g of golpe.golpes) {
-          const destino = posMonstruo(g.objetivo);
-          ui.proyectiles.push({ desde: posTorre(ej.tecnica), hasta: destino, inicio: performance.now() });
-          ui.textos.push({ x: destino.x, y: destino.y - 18 * escalaCampo(), texto: `−${dano}`, inicio: performance.now(), color: COLOR.TINTA });
-          if (g.vencido) ui.textos.push({ x: destino.x, y: destino.y + 6 * escalaCampo(), texto: `+${OLEADA.TINTA_POR_MONSTRUO}`, inicio: performance.now(), color: COLOR.ACENTO });
-        }
-      }
-    }
+    if (enOleada()) ({ dano, golpes } = golpear(ej.tecnica, r.puntaje));
     persistir();
     pintarTorres();
   }
@@ -411,7 +505,7 @@ function terminarTrazo(puntos) {
   crearMarca(r, dano, golpes, puntos[puntos.length - 1], ej.tecnica);
   pintarLectura(r, dano);
   if (enTutorial) tutorial.trazoHecho(r.valido);
-  ui.feedback = r.valido ? { ejercicio: ej, trazo: puntos, color: r.puntaje >= 0.7 ? COLOR.BIEN : r.puntaje < 0.4 ? COLOR.MAL : COLOR.TINTA } : null;
+  ui.feedback = r.valido ? { ejercicio: ej, trazo: puntos, color: colorPuntaje(r.puntaje) } : null;
   ui.bloqueoHasta = performance.now() + (r.valido ? FEEDBACK_MS : 0);
   pintarPad();
   if (r.valido) setTimeout(siguienteEjercicio, FEEDBACK_MS);
@@ -460,8 +554,10 @@ conectarLienzo(pad, {
   empezar(p) {
     ui.feedback = null;
     ui.marca = null;
-    const objetivo = ui.modo === MODO.OLEADA && ui.oleada ? objetivoPrincipal(ui.oleada) : null;
-    ui.objetivoBloqueado = objetivo ? objetivo.id : null;
+    if (!cuboEnCurso()) {
+      const objetivo = ui.modo === MODO.OLEADA && ui.oleada ? objetivoPrincipal(ui.oleada) : null;
+      ui.objetivoBloqueado = objetivo ? objetivo.id : null;
+    }
     ui.trazo = [p];
     pintarPad();
   },
@@ -476,7 +572,7 @@ conectarLienzo(pad, {
     const puntos = ui.trazo;
     ui.trazo = null;
     if (cancelado || !puntos) {
-      ui.objetivoBloqueado = null;
+      if (!cuboEnCurso()) ui.objetivoBloqueado = null;
       if (ui.redimPendiente) { ui.redimPendiente = false; redimensionar(); }
       pintarPad();
       return;
@@ -493,49 +589,91 @@ function textoEfecto(nivel) {
   return `+${Math.round(e.dano * 100)}% daño`;
 }
 
+const ICONO_TORRE = Object.freeze({
+  [TECNICA.LINEA]: '<path d="M17 31L31 17"/>',
+  [TECNICA.ELIPSE]: '<ellipse cx="24" cy="24" rx="9" ry="6"/>',
+  [TECNICA.PERSPECTIVA]: '<path d="M16 21h9v9h-9zM16 21l5-5h9l-5 5M25 30l5-5v-9"/>',
+});
+
+function spriteTorre(t, nivel, elegida) {
+  const maximo = nivel >= MEJORA.MAX;
+  const borde = maximo ? "#b8862b" : nivel > 0 ? COLOR.ACENTO : COLOR.TINTA;
+  const relleno = nivel >= 3 ? "#e6e8fb" : COLOR.PAPEL;
+  const pips = Array.from({ length: nivel }, (_, i) => {
+    const ang = Math.PI * (1.15 + (0.7 * (i + 0.5)) / MEJORA.MAX);
+    return `<circle cx="${(24 + Math.cos(ang) * 21).toFixed(1)}" cy="${(24 + Math.sin(ang) * 21).toFixed(1)}" r="2.4" fill="${borde}"/>`;
+  }).join("");
+  const halo = elegida ? '<circle cx="24" cy="24" r="21" fill="rgba(75,91,214,0.2)"/>' : "";
+  const corona = maximo ? `<path d="M17 9l3.5 3 3.5-5 3.5 5 3.5-3-1.5 6h-11z" fill="${borde}"/>` : "";
+  const torre = `<circle cx="24" cy="24" r="16" fill="${relleno}" stroke="${borde}" stroke-width="${(1.8 + nivel * 0.45).toFixed(2)}"/>`;
+  const icono = `<g fill="none" stroke="${borde}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONO_TORRE[t]}</g>`;
+  return `<svg viewBox="0 0 48 48" aria-hidden="true">${halo}${torre}${icono}${pips}${corona}</svg>`;
+}
+
+function textoCompra(t) {
+  const torre = TORRE[t];
+  const mejora = estado.mejoras[t];
+  const costo = costoMejora(estado, t);
+  if (costo === null) return `${torre.nombre}: mejora al máximo`;
+  return `Mejorar ${torre.corto.toLowerCase()} a M${mejora + 1} (${textoEfecto(mejora + 1)}) por ${costo} tinta`;
+}
+
+function refrescarCompra() {
+  for (const b of document.querySelectorAll("[data-mejorar]")) b.disabled = !puedeMejorar(estado, b.dataset.mejorar);
+  for (const c of document.querySelectorAll(".torre[data-torre]")) c.classList.toggle("sin-tinta", !puedeMejorar(estado, c.dataset.torre));
+}
+
 function pintarTorres() {
-  const cont = $("#torres");
   const ahora = performance.now();
   const aviso = ui.avisoMejora && ahora - ui.avisoMejora.inicio < AVISO_MEJORA_MS ? ui.avisoMejora : null;
-  cont.replaceChildren(...TECNICAS.map((t) => {
+  const oleada = ui.modo === MODO.OLEADA;
+  torresEl.replaceChildren(...TECNICAS.map((t) => {
     const torre = TORRE[t];
     const mejora = estado.mejoras[t];
     const costo = costoMejora(estado, t);
-    const puede = puedeMejorar(estado, t);
     const maximo = costo === null;
-    const elegir = h("button", {
+    const elegida = ui.tecnica === t;
+    const cuerpo = h("button", {
       type: "button",
-      role: "tab",
       class: "torre-btn",
-      "aria-selected": String(ui.tecnica === t),
+      "aria-pressed": String(elegida),
       "data-tecnica": t,
-      onclick: () => elegirTorre(t),
-    }, h("span", { text: torre.corto }), h("small", { text: `Nv ${nivelTecnica(estado, t)} · M${mejora}` }));
+      "aria-label": oleada ? `${torre.nombre}, M${mejora}. ${textoCompra(t)}` : `${torre.nombre}, M${mejora}. Practicar ${torre.corto.toLowerCase()}`,
+      onclick: () => (ui.modo === MODO.OLEADA ? comprarMejora(t) : elegirTorre(t)),
+    });
+    cuerpo.innerHTML = spriteTorre(t, mejora, elegida);
+    cuerpo.append(h("span", { class: "torre-nivel", text: `M${mejora}` }), h("span", { class: "torre-nombre", text: torre.corto }));
     const mejorar = h("button", {
       type: "button",
       class: "mejora-btn" + (maximo ? " maximo" : ""),
       "data-mejorar": t,
-      disabled: !puede,
-      "aria-label": maximo ? `${torre.nombre}: mejora al máximo` : `Mejorar ${torre.corto.toLowerCase()} a M${mejora + 1} (${textoEfecto(mejora + 1)}) por ${costo} tinta`,
+      disabled: !puedeMejorar(estado, t),
+      "aria-label": textoCompra(t),
       onclick: () => comprarMejora(t),
     });
     if (maximo) mejorar.append(h("span", { class: "mas", text: "Máx" }));
     else mejorar.append(h("span", { class: "mas", text: "+" }), h("small", { text: String(costo) }));
-    const celda = h("div", { class: "torre", "data-torre": t }, elegir, mejorar);
-    if (aviso && aviso.tecnica === t) celda.append(h("span", { class: "torre-aviso", role: "status", text: aviso.texto }));
+    const celda = h("div", { class: "torre" + (puedeMejorar(estado, t) ? "" : " sin-tinta"), "data-torre": t, "data-nivel": String(mejora) }, cuerpo, mejorar);
+    if (aviso && aviso.tecnica === t) celda.append(h("span", { class: "torre-aviso" + (aviso.falla ? " falla" : ""), role: "status", text: aviso.texto }));
     return celda;
   }));
 }
 
+function avisar(t, texto, falla = false) {
+  ui.avisoMejora = { tecnica: t, texto, falla, inicio: performance.now() };
+  pintarTorres();
+  clearTimeout(avisar.timer);
+  avisar.timer = setTimeout(() => { ui.avisoMejora = null; pintarTorres(); }, AVISO_MEJORA_MS);
+}
+
 function comprarMejora(t) {
   if (tutorial.activo() && tutorial.esperaTrazo()) return;
-  if (!mejorarTorre(estado, t)) return;
+  const costo = costoMejora(estado, t);
+  if (costo === null) { avisar(t, "Mejora al máximo", true); return; }
+  if (!mejorarTorre(estado, t)) { avisar(t, `Faltan ${Math.ceil(costo - estado.tinta)} de tinta`, true); return; }
   const nivel = estado.mejoras[t];
-  ui.avisoMejora = { tecnica: t, texto: `M${nivel}: ${textoEfecto(nivel)}`, inicio: performance.now() };
   persistir();
-  pintarTorres();
-  clearTimeout(comprarMejora.timer);
-  comprarMejora.timer = setTimeout(() => { ui.avisoMejora = null; pintarTorres(); }, AVISO_MEJORA_MS);
+  avisar(t, `M${nivel}: ${textoEfecto(nivel)}`);
 }
 
 function elegirTorre(t) {
@@ -545,10 +683,11 @@ function elegirTorre(t) {
     toast(`En la oleada elige el monstruo que va primero: ahora pide ${TORRE[pedida].corto.toLowerCase()}.`);
     return;
   }
+  if (ui.tecnica === t && ui.ejercicio && ui.ejercicio.tecnica === t) return;
   ui.tecnica = t;
   ui.feedback = null;
   pintarTorres();
-  nuevoEjercicio();
+  nuevoEjercicio(true);
 }
 
 function pintarHud() {
@@ -568,7 +707,7 @@ function pintarHud() {
   jefe.classList.toggle("listo", abierto);
   jefe.disabled = ocupado;
   jefe.setAttribute("aria-label", abierto ? "Enfrentar al jefe" : "Jefe bloqueado");
-  for (const b of document.querySelectorAll("[data-mejorar]")) b.disabled = !puedeMejorar(estado, b.dataset.mejorar);
+  refrescarCompra();
 }
 
 function iniciarOleada() {
@@ -577,7 +716,8 @@ function iniciarOleada() {
   ui.oleada = crearOleada(ui.numeroOleada, tecnicaMasDebil(estado));
   ui.proyectiles = [];
   ui.textos = [];
-  if (!ui.trazo) { ui.feedback = null; nuevoEjercicio(); }
+  if (!ui.trazo) { ui.feedback = null; nuevoEjercicio(true); }
+  pintarTorres();
   pintarPista();
   pintarHud();
 }
@@ -606,7 +746,7 @@ function insignia(ctx, t, r) {
   ctx.beginPath();
   if (t === TECNICA.LINEA) { ctx.moveTo(c.x - 3.5, c.y + 3); ctx.lineTo(c.x + 3.5, c.y - 3); }
   else if (t === TECNICA.ELIPSE) ctx.ellipse(c.x, c.y, 4, 2.6, 0, 0, Math.PI * 2);
-  else { ctx.moveTo(c.x - 4, c.y + 3); ctx.lineTo(c.x, c.y - 3); ctx.lineTo(c.x + 4, c.y + 3); }
+  else { ctx.rect(c.x - 3.5, c.y - 1.5, 5, 5); ctx.moveTo(c.x - 3.5, c.y - 1.5); ctx.lineTo(c.x - 1.5, c.y - 3.5); ctx.lineTo(c.x + 3.5, c.y - 3.5); ctx.lineTo(c.x + 3.5, c.y + 1.5); ctx.lineTo(c.x + 1.5, c.y + 3.5); }
   ctx.stroke();
 }
 
@@ -647,29 +787,10 @@ function pintarCampo(ahora) {
     ctx.font = `600 ${Math.round(13 * s)}px -apple-system, system-ui, sans-serif`;
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText(`♥ ${ui.oleada.vidas}`, Math.min(w - 40 * s, bx + 62 * s + w * 0.14), by);
+    ctx.textAlign = "center";
+    ctx.fillText(`♥ ${ui.oleada.vidas}`, bx, by - 24 * s);
     ctx.textBaseline = "alphabetic";
     ctx.textAlign = "start";
-  }
-  for (const t of TECNICAS) {
-    const p = { x: 0, y: 0 };
-    const real = posTorre(t);
-    ctx.save();
-    ctx.translate(real.x, real.y);
-    ctx.scale(s, s);
-    punto(ctx, p, RADIO_TORRE + 3, ui.tecnica === t ? "rgba(75,91,214,0.22)" : "rgba(31,29,43,0.06)");
-    punto(ctx, p, RADIO_TORRE, COLOR.PAPEL);
-    ctx.strokeStyle = ui.tecnica === t ? COLOR.ACENTO : COLOR.TINTA;
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, RADIO_TORRE, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    if (t === TECNICA.LINEA) { ctx.moveTo(p.x - 7, p.y + 6); ctx.lineTo(p.x + 7, p.y - 6); }
-    else if (t === TECNICA.ELIPSE) ctx.ellipse(p.x, p.y, 8, 5, 0, 0, Math.PI * 2);
-    else { ctx.moveTo(p.x - 8, p.y + 6); ctx.lineTo(p.x, p.y - 5); ctx.lineTo(p.x + 8, p.y + 6); }
-    ctx.stroke();
-    ctx.restore();
   }
   if (ui.oleada) {
     for (const m of ui.oleada.vivos) {
@@ -1022,7 +1143,7 @@ const tutorial = crearTutorial({
     if (paso.accion === ACCION_TUTORIAL.TRAZO && ui.tecnica !== TECNICA.LINEA) {
       ui.tecnica = TECNICA.LINEA;
       pintarTorres();
-      nuevoEjercicio();
+      nuevoEjercicio(true);
     }
   },
   alTerminar() {
@@ -1042,7 +1163,7 @@ function abrirTutorial() {
   }
   ui.tecnica = TECNICA.LINEA;
   pintarTorres();
-  nuevoEjercicio();
+  nuevoEjercicio(true);
   $("#lectura").replaceChildren();
   tutorial.abrir();
   pintarPista();
@@ -1055,7 +1176,7 @@ function redimensionar() {
   const antesH = tamPad.h;
   tamCampo = ajustarCanvas(campo);
   tamPad = ajustarCanvas(pad);
-  if (!ui.ejercicio || antesW !== tamPad.w || antesH !== tamPad.h) { ui.feedback = null; nuevoEjercicio(); }
+  if (!ui.ejercicio || antesW !== tamPad.w || antesH !== tamPad.h) { ui.feedback = null; nuevoEjercicio(true); }
   else pintarPad();
   if (ui.jefe.abierto) { tamJefe = ajustarCanvas(jefePad); pintarJefe(); }
 }

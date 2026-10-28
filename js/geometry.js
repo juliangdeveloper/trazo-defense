@@ -263,24 +263,57 @@ export function desvioHaciaFuga(puntos, fuga) {
   return anguloEntre(recta.ux * signo, recta.uy * signo, fuga.x - lejano.x, fuga.y - lejano.y);
 }
 
-export function evaluarPerspectiva(puntos, origen, fuga, largoGuia) {
+function costoArista(puntos, arista) {
+  const inicio = puntos[0];
+  const fin = puntos[puntos.length - 1];
+  return Math.min(distancia(inicio, arista.desde) + distancia(fin, arista.hasta), distancia(inicio, arista.hasta) + distancia(fin, arista.desde));
+}
+
+export function asignarArista(puntos, aristas, usadas = []) {
+  let mejor = -1;
+  let costo = Infinity;
+  aristas.forEach((arista, i) => {
+    if (usadas.includes(i)) return;
+    const c = costoArista(puntos, arista);
+    if (c < costo) { costo = c; mejor = i; }
+  });
+  return mejor;
+}
+
+export function evaluarFugante(puntos, arista, fuga) {
   if (trazoCorto(puntos)) return { valido: false, puntaje: 0 };
   const { recta, pct } = rectitudPct(puntos);
-  const desvio = anguloEntre(recta.ux, recta.uy, fuga.x - puntos[0].x, fuga.y - puntos[0].y);
-  const referencia = largoGuia > 0 ? largoGuia : longitud(puntos);
-  const inicioPct = (distancia(puntos[0], origen) / referencia) * 100;
-  const repasos = contarRepasos(puntos, recta.ux, recta.uy, referencia);
-  const base = 0.6 * clamp01(1 - desvio / PUNTAJE.PERSPECTIVA_DESVIO_MAX_DEG)
+  const desvio = desvioHaciaFuga(puntos, fuga);
+  const largo = distancia(arista.desde, arista.hasta) || longitud(puntos);
+  const cierrePct = (costoArista(puntos, arista) / 2 / largo) * 100;
+  const repasos = contarRepasos(puntos, recta.ux, recta.uy, largo);
+  const base = 0.55 * clamp01(1 - desvio / PUNTAJE.PERSPECTIVA_DESVIO_MAX_DEG)
     + 0.25 * clamp01(1 - pct / PUNTAJE.PERSPECTIVA_RECTITUD_MAX_PCT)
-    + 0.15 * clamp01(1 - inicioPct / PUNTAJE.PERSPECTIVA_INICIO_MAX_PCT);
+    + 0.2 * clamp01(1 - cierrePct / PUNTAJE.PERSPECTIVA_CIERRE_MAX_PCT);
   return {
     valido: true,
     puntaje: redondear(clamp01(base * factorRepasos(repasos)), 3),
     desvio_deg: redondear(desvio, 1),
     rectitud_pct: redondear(pct, 1),
-    inicio_pct: redondear(inicioPct, 1),
+    cierre_pct: redondear(cierrePct, 1),
     repasos,
     duracion_ms: Math.round(duracionMs(puntos)),
+  };
+}
+
+export function resumenCubo(resultados, total = PUNTAJE.CUBO_LINEAS) {
+  const validos = resultados.filter((r) => r && r.valido);
+  if (!validos.length) return { valido: false, puntaje: 0 };
+  const media = (clave) => validos.reduce((acc, r) => acc + r[clave], 0) / validos.length;
+  return {
+    valido: true,
+    puntaje: redondear(validos.reduce((acc, r) => acc + r.puntaje, 0) / Math.max(total, validos.length), 3),
+    desvio_deg: redondear(media("desvio_deg"), 1),
+    rectitud_pct: redondear(media("rectitud_pct"), 1),
+    cierre_pct: redondear(media("cierre_pct"), 1),
+    repasos: validos.reduce((acc, r) => acc + r.repasos, 0),
+    lineas: validos.length,
+    duracion_ms: validos.reduce((acc, r) => acc + r.duracion_ms, 0),
   };
 }
 
