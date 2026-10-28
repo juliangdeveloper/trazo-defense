@@ -10,7 +10,9 @@
 - **Línea:** une los dos puntos de un solo trazo. Se mide desviación, extremos, repasos y velocidad.
 - **Elipse:** dibújala dentro de la caja. Se mide ajuste, cierre y temblor.
 - **Perspectiva:** traza hacia el punto de fuga. Se mide el desvío en grados.
+- Las tres torres están disponibles desde el inicio. En una oleada los monstruos mezclan técnicas y el que va primero elige la torre y el ejercicio.
 - Mejor trazo, más daño. Cada resultado muestra sus métricas.
+- **Mejoras:** la tinta compra 5 niveles por torre que alternan más daño y más objetivos. El daño sigue dependiendo del puntaje del trazo.
 - **Jefe:** con los mínimos del capítulo 1 cumplidos, dibuja horizonte, cara frontal y líneas de fuga para romper sus 4 puntos débiles.
 - La primera oleada que terminas cada día da tinta extra. No hay rachas ni se pierde nada.
 - El tutorial se puede repetir desde Ajustes.

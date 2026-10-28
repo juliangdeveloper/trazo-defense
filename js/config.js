@@ -1,5 +1,5 @@
 export const APP_ID = "trazo-defense";
-export const APP_VERSION = "0.1.4";
+export const APP_VERSION = "0.1.5";
 export const SAVE_KEY = "trazo-defense.save";
 export const SAVE_VERSION = 1;
 export const CACHE_PREFIX = "trazo-defense-";
@@ -13,9 +13,9 @@ export const TECNICA = Object.freeze({
 export const TECNICAS = Object.freeze([TECNICA.LINEA, TECNICA.ELIPSE, TECNICA.PERSPECTIVA]);
 
 export const TORRE = Object.freeze({
-  [TECNICA.LINEA]: Object.freeze({ nombre: "Torre de línea", corto: "Línea", danoBase: 24, costoTinta: 0, leccion: "Drawabox 1 · Líneas" }),
-  [TECNICA.ELIPSE]: Object.freeze({ nombre: "Torre de elipse", corto: "Elipse", danoBase: 30, costoTinta: 20, leccion: "Drawabox 1 · Elipses" }),
-  [TECNICA.PERSPECTIVA]: Object.freeze({ nombre: "Torre de perspectiva", corto: "Perspectiva", danoBase: 36, costoTinta: 40, leccion: "Drawabox 1 · Cajas" }),
+  [TECNICA.LINEA]: Object.freeze({ nombre: "Torre de línea", corto: "Línea", danoBase: 24, leccion: "Drawabox 1 · Líneas" }),
+  [TECNICA.ELIPSE]: Object.freeze({ nombre: "Torre de elipse", corto: "Elipse", danoBase: 30, leccion: "Drawabox 1 · Elipses" }),
+  [TECNICA.PERSPECTIVA]: Object.freeze({ nombre: "Torre de perspectiva", corto: "Perspectiva", danoBase: 36, leccion: "Drawabox 1 · Cajas" }),
 });
 
 export const METRICA_PRINCIPAL = Object.freeze({
@@ -83,6 +83,22 @@ export const JEFE = Object.freeze({
   ]),
 });
 
+export const MEJORA = Object.freeze({
+  MAX: 5,
+  COSTOS: Object.freeze([30, 50, 80, 120, 180]),
+  EFECTOS: Object.freeze([
+    Object.freeze({ dano: 0.15, objetivos: 0 }),
+    Object.freeze({ dano: 0, objetivos: 1 }),
+    Object.freeze({ dano: 0.15, objetivos: 0 }),
+    Object.freeze({ dano: 0, objetivos: 1 }),
+    Object.freeze({ dano: 0.2, objetivos: 0 }),
+  ]),
+});
+
+export const MEZCLA = Object.freeze({
+  PESO_DEBIL: 0.4,
+});
+
 export const SESION = Object.freeze({
   BONUS_TINTA: 40,
 });
@@ -137,6 +153,8 @@ export const FASE_PUNTOS = Object.freeze([
   Object.freeze({ texto: "Nivel por técnica desde promedios móviles, no por horas jugadas", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Curva de progreso por día y mínimos del capítulo 1", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Bonus de tinta en la primera oleada de cada día, sin rachas", estado: PUNTO_FASE.HECHO }),
+  Object.freeze({ texto: "Las 3 torres desde el inicio y oleadas que mezclan técnicas", estado: PUNTO_FASE.HECHO }),
+  Object.freeze({ texto: "Mejoras de torre con tinta: más daño o más objetivos, sin quitarle peso al trazo", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Tutorial inicial que se puede repetir", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Funciona sin conexión y en iPhone 13 mini", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Calibrar umbrales con trazos reales", estado: PUNTO_FASE.PENDIENTE }),

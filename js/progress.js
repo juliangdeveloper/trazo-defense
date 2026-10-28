@@ -1,4 +1,4 @@
-import { TECNICA, TECNICAS, TORRE, METRICA_PRINCIPAL, NIVEL, MINIMOS_CAPITULO, SESION, SAVE_VERSION } from "./config.js";
+import { TECNICA, TECNICAS, METRICA_PRINCIPAL, NIVEL, MINIMOS_CAPITULO, SESION, SAVE_VERSION, MEJORA } from "./config.js";
 import { TIPO_STAT } from "./meta.js";
 
 export const STATS = Object.freeze({
@@ -37,7 +37,7 @@ export function estadoInicial() {
   return {
     v: SAVE_VERSION,
     tinta: 0,
-    torres: mapaTecnicas((t) => TORRE[t].costoTinta === 0),
+    mejoras: mapaTecnicas(() => 0),
     recientes: mapaTecnicas(() => []),
     intentos: mapaTecnicas(() => 0),
     historial: mapaTecnicas(() => ({})),
@@ -60,7 +60,7 @@ export function normalizarEstado(raw) {
   if (!esObjeto(raw) || raw.v !== SAVE_VERSION) return base;
   base.tinta = Math.max(0, numero(raw.tinta, 0));
   for (const t of TECNICAS) {
-    if (esObjeto(raw.torres) && raw.torres[t] === true) base.torres[t] = true;
+    base.mejoras[t] = Math.min(MEJORA.MAX, Math.max(0, Math.floor(numero(esObjeto(raw.mejoras) ? raw.mejoras[t] : 0, 0))));
     const lista = esObjeto(raw.recientes) && Array.isArray(raw.recientes[t]) ? raw.recientes[t] : [];
     base.recientes[t] = lista.filter((r) => esObjeto(r) && Number.isFinite(r.p) && Number.isFinite(r.m)).slice(-NIVEL.VENTANA);
     base.intentos[t] = Math.max(0, numero(esObjeto(raw.intentos) ? raw.intentos[t] : 0, 0));
@@ -165,14 +165,31 @@ export function jefeDesbloqueado(estado) {
   return minimosCapitulo(estado).every((m) => m.cumple);
 }
 
-export function puedeComprarTorre(estado, tecnica) {
-  return !estado.torres[tecnica] && estado.tinta >= TORRE[tecnica].costoTinta;
+export function tecnicaMasDebil(estado) {
+  let peor = TECNICA.LINEA;
+  let peorValor = Infinity;
+  for (const t of TECNICAS) {
+    const prom = promedioMovil(estado, t);
+    const valor = prom.muestras < NIVEL.MUESTRAS_MIN ? -1 + prom.muestras / 100 : prom.puntaje;
+    if (valor < peorValor) { peorValor = valor; peor = t; }
+  }
+  return peor;
 }
 
-export function comprarTorre(estado, tecnica) {
-  if (!puedeComprarTorre(estado, tecnica)) return false;
-  estado.tinta -= TORRE[tecnica].costoTinta;
-  estado.torres[tecnica] = true;
+export function costoMejora(estado, tecnica) {
+  const nivel = estado.mejoras[tecnica] || 0;
+  return nivel >= MEJORA.MAX ? null : MEJORA.COSTOS[nivel];
+}
+
+export function puedeMejorar(estado, tecnica) {
+  const costo = costoMejora(estado, tecnica);
+  return costo !== null && estado.tinta >= costo;
+}
+
+export function mejorarTorre(estado, tecnica) {
+  if (!puedeMejorar(estado, tecnica)) return false;
+  estado.tinta -= costoMejora(estado, tecnica);
+  estado.mejoras[tecnica] += 1;
   return true;
 }
 

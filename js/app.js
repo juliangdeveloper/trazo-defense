@@ -1,14 +1,14 @@
 import {
   APP_ID, APP_VERSION, SAVE_KEY, TECNICA, TECNICAS, TORRE, METRICA_PRINCIPAL, POSICION_TORRE, CAMINO,
-  JEFE, COMPARA, PANTALLA, MODO, FASE_PUNTOS, PUNTO_FASE, FASES_NOMBRE, ESTADOS_NOMBRE, TIPOS_NOMBRE, TOTAL_FASES, OLEADA,
+  JEFE, COMPARA, PANTALLA, MODO, FASE_PUNTOS, PUNTO_FASE, FASES_NOMBRE, ESTADOS_NOMBRE, TIPOS_NOMBRE, TOTAL_FASES, OLEADA, MEJORA,
 } from "./config.js";
 import { PROYECTO, FASE, metaProyecto, metaUpdate, metaRead, crearEscritor } from "./meta.js";
 import { evaluarLinea, evaluarElipse, evaluarPerspectiva, evaluarJefe, clasificarTrazosJefe, faltantesJefe, metaPuntoDebil, TIPO_TRAZO_JEFE } from "./geometry.js";
 import {
   STATS, cargar, guardar, registrarTrazo, promedioMovil, nivelTecnica, nivelJugador, minimosCapitulo, jefeDesbloqueado,
-  puedeComprarTorre, comprarTorre, completarSesion, registrarOleada, registrarJefe, curva, statsMeta, logrosDe,
+  tecnicaMasDebil, costoMejora, puedeMejorar, mejorarTorre, completarSesion, registrarOleada, registrarJefe, curva, statsMeta, logrosDe,
 } from "./progress.js";
-import { crearOleada, actualizarOleada, objetivoPrincipal, puntoEnCamino, danoDeTrazo, atacar, tipoMonstruo } from "./game.js";
+import { crearOleada, actualizarOleada, objetivoPrincipal, puntoEnCamino, danoDeTrazo, atacar, tipoMonstruo, efectoMejora } from "./game.js";
 import { crearEjercicio, escenaJefe } from "./ejercicios.js";
 import { crearTutorial, ACCION_TUTORIAL } from "./tutorial.js";
 
@@ -68,6 +68,7 @@ const ui = {
   numeroOleada: 1,
   proyectiles: [],
   textos: [],
+  mejorasAbiertas: false,
   jefe: { abierto: false, trazos: [], trazo: null, nivel: 1, resultado: null },
 };
 
@@ -121,7 +122,22 @@ function pintarTinta() {
   $("#tinta-valor").textContent = String(Math.round(estado.tinta));
 }
 
+function tecnicaPedida() {
+  if (ui.modo !== MODO.OLEADA || !ui.oleada) return null;
+  const objetivo = objetivoPrincipal(ui.oleada);
+  if (objetivo) return objetivo.tecnica;
+  return ui.oleada.cola.length ? ui.oleada.cola[0].tecnica : null;
+}
+
+function seguirMonstruo() {
+  const t = tecnicaPedida();
+  if (!t || t === ui.tecnica) return;
+  ui.tecnica = t;
+  pintarTorres();
+}
+
 function nuevoEjercicio() {
+  seguirMonstruo();
   pintarPista();
   const pista = $("#pad-hint");
   const arriba = pista.offsetTop + pista.offsetHeight + MARGEN_PISTA;
@@ -272,14 +288,20 @@ function terminarTrazo(puntos) {
   if (r.valido && !enTutorial) {
     registrarTrazo(estado, ej.tecnica, r, new Date());
     if (ui.modo === MODO.OLEADA && ui.oleada && !ui.oleada.terminada) {
-      dano = danoDeTrazo(ej.tecnica, r.puntaje);
+      const mejora = estado.mejoras[ej.tecnica];
+      dano = danoDeTrazo(ej.tecnica, r.puntaje, mejora);
       const objetivo = objetivoPrincipal(ui.oleada);
-      if (objetivo) {
+      if (objetivo && dano <= 0) {
         const destino = posMonstruo(objetivo);
-        const golpe = atacar(ui.oleada, dano);
-        ui.proyectiles.push({ desde: posTorre(ej.tecnica), hasta: destino, inicio: performance.now() });
-        ui.textos.push({ x: destino.x, y: destino.y - 18, texto: dano > 0 ? `−${dano}` : "fallo", inicio: performance.now(), color: dano > 0 ? COLOR.TINTA : COLOR.MAL });
-        if (golpe.vencido) ui.textos.push({ x: destino.x, y: destino.y + 6, texto: `+${OLEADA.TINTA_POR_MONSTRUO}`, inicio: performance.now(), color: COLOR.ACENTO });
+        ui.textos.push({ x: destino.x, y: destino.y - 18, texto: "fallo", inicio: performance.now(), color: COLOR.MAL });
+      } else if (objetivo) {
+        const golpe = atacar(ui.oleada, dano, efectoMejora(mejora).objetivos);
+        for (const g of golpe.golpes) {
+          const destino = posMonstruo(g.objetivo);
+          ui.proyectiles.push({ desde: posTorre(ej.tecnica), hasta: destino, inicio: performance.now() });
+          ui.textos.push({ x: destino.x, y: destino.y - 18, texto: `−${dano}`, inicio: performance.now(), color: COLOR.TINTA });
+          if (g.vencido) ui.textos.push({ x: destino.x, y: destino.y + 6, texto: `+${OLEADA.TINTA_POR_MONSTRUO}`, inicio: performance.now(), color: COLOR.ACENTO });
+        }
       }
     }
     persistir();
@@ -348,12 +370,11 @@ function pintarTorres() {
   cont.replaceChildren();
   for (const t of TECNICAS) {
     const torre = TORRE[t];
-    const propia = estado.torres[t];
-    const detalle = propia ? `Nivel ${nivelTecnica(estado, t)}` : `${torre.costoTinta} tinta`;
+    const detalle = `Nv ${nivelTecnica(estado, t)} · Mejora ${estado.mejoras[t]}`;
     cont.append(h("button", {
       type: "button",
       role: "tab",
-      class: "torre-btn" + (propia ? "" : " bloqueada"),
+      class: "torre-btn",
       "aria-selected": String(ui.tecnica === t),
       "data-tecnica": t,
       onclick: () => elegirTorre(t),
@@ -363,15 +384,10 @@ function pintarTorres() {
 
 function elegirTorre(t) {
   if (tutorial.activo() && tutorial.esperaTrazo()) return;
-  if (!estado.torres[t]) {
-    if (puedeComprarTorre(estado, t)) {
-      comprarTorre(estado, t);
-      persistir();
-      toast(`${TORRE[t].nombre} construida: −${TORRE[t].costoTinta} tinta.`);
-    } else {
-      toast(`Necesitas ${TORRE[t].costoTinta} tinta. Se gana venciendo monstruos.`);
-      return;
-    }
+  const pedida = tecnicaPedida();
+  if (pedida && pedida !== t) {
+    toast(`En la oleada elige el monstruo que va primero: ahora pide ${TORRE[pedida].corto.toLowerCase()}.`);
+    return;
   }
   ui.tecnica = t;
   ui.feedback = null;
@@ -401,9 +417,10 @@ function pintarHud() {
 function iniciarOleada() {
   if (ui.modo === MODO.OLEADA) return;
   ui.modo = MODO.OLEADA;
-  ui.oleada = crearOleada(ui.numeroOleada);
+  ui.oleada = crearOleada(ui.numeroOleada, tecnicaMasDebil(estado));
   ui.proyectiles = [];
   ui.textos = [];
+  if (!ui.trazo) { ui.feedback = null; nuevoEjercicio(); }
   pintarPista();
   pintarHud();
 }
@@ -422,6 +439,18 @@ function terminarOleada() {
   pintarPista();
   pintarHud();
   toast(mensaje);
+}
+
+function insignia(ctx, t, r) {
+  const c = { x: r * 0.85, y: r * 0.75 };
+  punto(ctx, c, 6.5, COLOR.PAPEL);
+  ctx.strokeStyle = COLOR.ACENTO;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  if (t === TECNICA.LINEA) { ctx.moveTo(c.x - 3.5, c.y + 3); ctx.lineTo(c.x + 3.5, c.y - 3); }
+  else if (t === TECNICA.ELIPSE) ctx.ellipse(c.x, c.y, 4, 2.6, 0, 0, Math.PI * 2);
+  else { ctx.moveTo(c.x - 4, c.y + 3); ctx.lineTo(c.x, c.y - 3); ctx.lineTo(c.x + 4, c.y + 3); }
+  ctx.stroke();
 }
 
 function pintarCampo(ahora) {
@@ -459,8 +488,6 @@ function pintarCampo(ahora) {
   }
   for (const t of TECNICAS) {
     const p = posTorre(t);
-    const propia = estado.torres[t];
-    ctx.globalAlpha = propia ? 1 : 0.35;
     punto(ctx, p, RADIO_TORRE + 3, ui.tecnica === t ? "rgba(75,91,214,0.22)" : "rgba(31,29,43,0.06)");
     punto(ctx, p, RADIO_TORRE, COLOR.PAPEL);
     ctx.strokeStyle = ui.tecnica === t ? COLOR.ACENTO : COLOR.TINTA;
@@ -501,6 +528,7 @@ function pintarCampo(ahora) {
       ctx.fillRect(-r, -r - 8, r * 2, 3);
       ctx.fillStyle = COLOR.BIEN;
       ctx.fillRect(-r, -r - 8, r * 2 * Math.max(0, m.vida / m.vidaMax), 3);
+      if (m.tecnica) insignia(ctx, m.tecnica, r);
       ctx.restore();
     }
   }
@@ -536,11 +564,16 @@ let ultimoHud = 0;
 function bucle(ahora) {
   const dt = Math.min(DT_MAX_MS, ahora - ultimoFrame);
   ultimoFrame = ahora;
-  const corre = ui.modo === MODO.OLEADA && ui.oleada && ui.pantalla === PANTALLA.JUGAR && !tutorial.activo() && !ui.jefe.abierto && document.visibilityState === "visible";
+  const corre = ui.modo === MODO.OLEADA && ui.oleada && ui.pantalla === PANTALLA.JUGAR && !tutorial.activo() && !ui.jefe.abierto && !ui.mejorasAbiertas && document.visibilityState === "visible";
   if (corre) {
     actualizarOleada(ui.oleada, dt);
     if (ui.oleada.terminada) terminarOleada();
-    else if (ahora - ultimoHud > 250) { ultimoHud = ahora; pintarHud(); }
+    else if (ahora - ultimoHud > 250) {
+      ultimoHud = ahora;
+      pintarHud();
+      const pedida = tecnicaPedida();
+      if (!ui.trazo && !ui.feedback && ahora >= ui.bloqueoHasta && pedida && pedida !== ui.tecnica) nuevoEjercicio();
+    }
   }
   if (ui.pantalla === PANTALLA.JUGAR) pintarCampo(ahora);
   requestAnimationFrame(bucle);
@@ -601,6 +634,53 @@ function pintarJefe() {
   const clas = clasificarTrazosJefe(ui.jefe.trazos, fuga);
   ui.jefe.trazos.forEach((t, i) => trazar(ctx, t, COLOR_TRAZO_JEFE[clas[i].tipo], 2.5));
   if (ui.jefe.trazo) trazar(ctx, ui.jefe.trazo, COLOR.TINTA, 2.5);
+}
+
+function textoEfecto(nivel) {
+  const e = MEJORA.EFECTOS[nivel - 1];
+  if (e.objetivos > 0) return `Nv ${nivel}: golpea ${efectoMejora(nivel).objetivos} objetivos`;
+  return `Nv ${nivel}: +${Math.round(e.dano * 100)}% daño`;
+}
+
+function pintarMejoras() {
+  $("#mejoras-tinta").textContent = `Tienes ${Math.round(estado.tinta)} tinta.`;
+  const lista = $("#mejoras-lista");
+  lista.replaceChildren(...TECNICAS.map((t) => {
+    const nivel = estado.mejoras[t];
+    const ef = efectoMejora(nivel);
+    const costo = costoMejora(estado, t);
+    return h("div", { class: "mejora", "data-tecnica": t },
+      h("div", { class: "fila" }, h("h3", { text: TORRE[t].nombre }), h("span", { class: "nivel", text: `Mejora ${nivel}/${MEJORA.MAX}` })),
+      h("p", { class: "tenue", text: `Daño ×${ef.multiplicador.toFixed(2)} · ${ef.objetivos === 1 ? "1 objetivo" : `${ef.objetivos} objetivos`}` }),
+      h("ol", { class: "mejora-niveles" }, MEJORA.EFECTOS.map((_, i) => h("li", { class: i < nivel ? "hecho" : "", text: `${textoEfecto(i + 1)} · ${MEJORA.COSTOS[i]} tinta` }))),
+      h("button", {
+        class: "btn primary ancho", type: "button", disabled: !puedeMejorar(estado, t), "data-mejorar": t,
+        onclick: () => comprarMejora(t),
+        text: costo === null ? "Nivel máximo" : `Mejorar a Nv ${nivel + 1} · ${costo} tinta`,
+      }));
+  }));
+}
+
+function comprarMejora(t) {
+  if (!mejorarTorre(estado, t)) return;
+  persistir();
+  pintarTinta();
+  pintarTorres();
+  pintarMejoras();
+  toast(`${TORRE[t].nombre}: ${textoEfecto(estado.mejoras[t])}.`);
+}
+
+function abrirMejoras() {
+  if (tutorial.activo()) return;
+  ui.mejorasAbiertas = true;
+  pintarMejoras();
+  $("#mejoras").hidden = false;
+}
+
+function cerrarMejoras() {
+  ui.mejorasAbiertas = false;
+  $("#mejoras").hidden = true;
+  ultimoFrame = performance.now();
 }
 
 function abrirJefe() {
@@ -668,6 +748,8 @@ conectarLienzo(jefePad, {
 });
 
 $("#jefe-salir").addEventListener("click", cerrarJefe);
+$("#btn-mejoras").addEventListener("click", abrirMejoras);
+$("#mejoras-salir").addEventListener("click", cerrarMejoras);
 $("#jefe-deshacer").addEventListener("click", () => { if (ui.jefe.resultado) return; ui.jefe.trazos.pop(); pintarJefe(); pintarPasoJefe(); });
 $("#jefe-borrar").addEventListener("click", () => { if (ui.jefe.resultado) return; ui.jefe.trazos = []; pintarJefe(); pintarPasoJefe(); });
 $("#jefe-atacar").addEventListener("click", atacarJefe);

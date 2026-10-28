@@ -1,4 +1,4 @@
-import { CAMINO, MONSTRUO, OLEADA, TORRE, PUNTAJE } from "./config.js";
+import { CAMINO, MONSTRUO, OLEADA, TORRE, PUNTAJE, MEJORA, MEZCLA, TECNICAS } from "./config.js";
 
 export function largoCamino(camino = CAMINO) {
   let total = 0;
@@ -38,10 +38,24 @@ export function tipoMonstruo(id) {
   return Object.values(MONSTRUO).find((m) => m.id === id) || MONSTRUO.BORRON;
 }
 
-export function crearOleada(numero) {
+export function tecnicasOleada(cantidad, debil, numero = 1, peso = MEZCLA.PESO_DEBIL) {
+  const base = TECNICAS.includes(debil) ? debil : TECNICAS[0];
+  const otras = TECNICAS.filter((t) => t !== base);
+  const lista = [];
+  let siguienteOtra = Math.max(0, Math.floor(numero) - 1);
+  for (let i = 0; i < cantidad; i++) {
+    if (Math.floor((i + 1) * peso) > Math.floor(i * peso)) lista.push(base);
+    else { lista.push(otras[siguienteOtra % otras.length]); siguienteOtra += 1; }
+  }
+  return lista;
+}
+
+export function crearOleada(numero, debil) {
+  const tipos = composicionOleada(numero);
+  const tecnicas = tecnicasOleada(tipos.length, debil, numero);
   return {
     numero: Math.max(1, Math.floor(numero)),
-    cola: composicionOleada(numero),
+    cola: tipos.map((tipo, i) => ({ tipo, tecnica: tecnicas[i] })),
     vivos: [],
     siguienteId: 1,
     esperaMs: 600,
@@ -62,9 +76,10 @@ export function actualizarOleada(oleada, dtMs) {
   if (oleada.terminada) return oleada;
   oleada.esperaMs -= dtMs;
   if (oleada.cola.length && oleada.esperaMs <= 0) {
-    const tipo = tipoMonstruo(oleada.cola.shift());
+    const entrada = oleada.cola.shift();
+    const tipo = tipoMonstruo(entrada.tipo);
     const vida = Math.round(tipo.vida * multiplicadorVida(oleada.numero));
-    oleada.vivos.push({ id: oleada.siguienteId++, tipo: tipo.id, vida, vidaMax: vida, avance: 0, golpeMs: 0 });
+    oleada.vivos.push({ id: oleada.siguienteId++, tipo: tipo.id, tecnica: entrada.tecnica, vida, vidaMax: vida, avance: 0, golpeMs: 0 });
     oleada.esperaMs = OLEADA.INTERVALO_MS;
   }
   for (const m of oleada.vivos) {
@@ -94,23 +109,37 @@ export function objetivoPrincipal(oleada) {
   return mejor;
 }
 
-export function danoDeTrazo(tecnica, puntaje) {
-  const torre = TORRE[tecnica];
-  if (!torre || !Number.isFinite(puntaje) || puntaje < PUNTAJE.FALLO_BAJO) return 0;
-  return Math.round(torre.danoBase * puntaje);
+export function efectoMejora(nivel) {
+  const n = Math.min(MEJORA.MAX, Math.max(0, Math.floor(nivel) || 0));
+  let multiplicador = 1;
+  let objetivos = 1;
+  for (const e of MEJORA.EFECTOS.slice(0, n)) { multiplicador += e.dano; objetivos += e.objetivos; }
+  return { multiplicador: Math.round(multiplicador * 100) / 100, objetivos };
 }
 
-export function atacar(oleada, dano) {
-  const objetivo = objetivoPrincipal(oleada);
-  if (!objetivo || dano <= 0) return { objetivo, dano: 0, vencido: false };
-  objetivo.vida -= dano;
-  objetivo.golpeMs = 220;
-  let vencido = false;
-  if (objetivo.vida <= 0) {
-    vencido = true;
-    oleada.vivos = oleada.vivos.filter((m) => m !== objetivo);
-    oleada.vencidos += 1;
-    oleada.tinta += OLEADA.TINTA_POR_MONSTRUO;
-  }
-  return { objetivo, dano, vencido };
+export function danoDeTrazo(tecnica, puntaje, mejora = 0) {
+  const torre = TORRE[tecnica];
+  if (!torre || !Number.isFinite(puntaje) || puntaje < PUNTAJE.FALLO_BAJO) return 0;
+  return Math.round(torre.danoBase * puntaje * efectoMejora(mejora).multiplicador);
+}
+
+export function objetivosDelFrente(oleada, cantidad = 1) {
+  return [...oleada.vivos].sort((a, b) => b.avance - a.avance).slice(0, Math.max(1, cantidad));
+}
+
+export function atacar(oleada, dano, cantidad = 1) {
+  const objetivos = objetivosDelFrente(oleada, cantidad);
+  if (!objetivos.length || dano <= 0) return { golpes: [], dano: 0 };
+  const golpes = objetivos.map((objetivo) => {
+    objetivo.vida -= dano;
+    objetivo.golpeMs = 220;
+    const vencido = objetivo.vida <= 0;
+    if (vencido) {
+      oleada.vencidos += 1;
+      oleada.tinta += OLEADA.TINTA_POR_MONSTRUO;
+    }
+    return { objetivo, vencido };
+  });
+  oleada.vivos = oleada.vivos.filter((m) => m.vida > 0);
+  return { golpes, dano };
 }
