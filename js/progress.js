@@ -7,7 +7,7 @@ export const STATS = Object.freeze({
   oleadas_ganadas: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "oleadas ganadas" },
   monstruos_vencidos: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "monstruos vencidos" },
   jefes_vencidos: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "victorias contra jefes" },
-  dias_practica: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "días con oleada del día completa, no seguidos" },
+  dias_practica: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "días con al menos una oleada terminada, no seguidos" },
   mejor_puntaje_linea_pct: { tipo: TIPO_STAT.MEJOR_MARCA, unidad: "mejor puntaje de una línea, en porcentaje" },
   nivel_linea: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de líneas, 1 a 5" },
   nivel_elipse: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de elipses, 1 a 5" },
@@ -149,18 +149,6 @@ export function nivelTecnica(estado, tecnica) {
 export function nivelJugador(estado) {
   const niveles = TECNICAS.map((t) => nivelTecnica(estado, t));
   return Math.max(1, Math.floor(niveles.reduce((s, n) => s + n, 0) / niveles.length));
-}
-
-export function tecnicaMasDebil(estado) {
-  const disponibles = TECNICAS.filter((t) => estado.torres[t]);
-  let peor = disponibles[0] || TECNICA.LINEA;
-  let peorValor = Infinity;
-  for (const t of disponibles) {
-    const prom = promedioMovil(estado, t);
-    const valor = prom.muestras < NIVEL.MUESTRAS_MIN ? -1 + prom.muestras / 100 : prom.puntaje;
-    if (valor < peorValor) { peorValor = valor; peor = t; }
-  }
-  return peor;
 }
 
 export function minimosCapitulo(estado) {

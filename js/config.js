@@ -1,5 +1,5 @@
 export const APP_ID = "trazo-defense";
-export const APP_VERSION = "0.1.3";
+export const APP_VERSION = "0.1.4";
 export const SAVE_KEY = "trazo-defense.save";
 export const SAVE_VERSION = 1;
 export const CACHE_PREFIX = "trazo-defense-";
@@ -84,11 +84,6 @@ export const JEFE = Object.freeze({
 });
 
 export const SESION = Object.freeze({
-  MINUTOS: 5,
-  DURACION_MS: 300000,
-  MARGEN_FINAL_MS: 15000,
-  MONSTRUOS: 40,
-  PESO_DEBIL: 0.6,
   BONUS_TINTA: 40,
 });
 
@@ -141,7 +136,7 @@ export const FASE_PUNTOS = Object.freeze([
   Object.freeze({ texto: "Jefe con 4 puntos débiles y metas que suben con tu nivel", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Nivel por técnica desde promedios móviles, no por horas jugadas", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Curva de progreso por día y mínimos del capítulo 1", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Oleada diaria de 5 minutos centrada en tu técnica más débil, con bonus y sin rachas", estado: PUNTO_FASE.HECHO }),
+  Object.freeze({ texto: "Bonus de tinta en la primera oleada de cada día, sin rachas", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Tutorial inicial que se puede repetir", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Funciona sin conexión y en iPhone 13 mini", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Calibrar umbrales con trazos reales", estado: PUNTO_FASE.PENDIENTE }),

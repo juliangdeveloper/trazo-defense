@@ -1,4 +1,4 @@
-import { CAMINO, MONSTRUO, OLEADA, TORRE, PUNTAJE, SESION } from "./config.js";
+import { CAMINO, MONSTRUO, OLEADA, TORRE, PUNTAJE } from "./config.js";
 
 export function largoCamino(camino = CAMINO) {
   let total = 0;
@@ -27,40 +27,11 @@ export function composicionOleada(numero) {
   const cantidad = OLEADA.MONSTRUOS_BASE + (n - 1) * OLEADA.MONSTRUOS_POR_OLEADA;
   const cola = [];
   for (let i = 1; i <= cantidad; i++) {
-    cola.push({ tipo: tipoEnPosicion(i, n >= 2), tecnica: null });
+    if (n >= 2 && i % 5 === 0) cola.push(MONSTRUO.MANCHA.id);
+    else if (i % 3 === 0) cola.push(MONSTRUO.GARABATO.id);
+    else cola.push(MONSTRUO.BORRON.id);
   }
   return cola;
-}
-
-function tipoEnPosicion(i, conManchas) {
-  if (conManchas && i % 5 === 0) return MONSTRUO.MANCHA.id;
-  if (i % 3 === 0) return MONSTRUO.GARABATO.id;
-  return MONSTRUO.BORRON.id;
-}
-
-export function tecnicasOleadaDia(disponibles, debil, cantidad = SESION.MONSTRUOS, peso = SESION.PESO_DEBIL) {
-  const otras = disponibles.filter((t) => t !== debil);
-  const lista = [];
-  let siguienteOtra = 0;
-  for (let i = 0; i < cantidad; i++) {
-    const tocaDebil = !otras.length || Math.ceil((i + 1) * peso) > Math.ceil(i * peso);
-    if (tocaDebil) lista.push(debil);
-    else { lista.push(otras[siguienteOtra % otras.length]); siguienteOtra += 1; }
-  }
-  return lista;
-}
-
-export function crearOleadaDia({ disponibles, debil, nivel = 1 }) {
-  const tecnicas = tecnicasOleadaDia(disponibles, debil);
-  const oleada = crearOleada(Math.max(1, Math.floor(nivel)));
-  oleada.diaria = true;
-  oleada.cola = tecnicas.map((tecnica, i) => ({ tipo: tipoEnPosicion(i + 1, true), tecnica }));
-  oleada.intervaloMs = (SESION.DURACION_MS - SESION.MARGEN_FINAL_MS) / Math.max(1, tecnicas.length - 1);
-  return oleada;
-}
-
-export function restanteMs(oleada) {
-  return Math.max(0, SESION.DURACION_MS - oleada.transcurridoMs);
 }
 
 export function tipoMonstruo(id) {
@@ -74,9 +45,6 @@ export function crearOleada(numero) {
     vivos: [],
     siguienteId: 1,
     esperaMs: 600,
-    intervaloMs: OLEADA.INTERVALO_MS,
-    transcurridoMs: 0,
-    diaria: false,
     vidas: OLEADA.VIDAS_BASE,
     vencidos: 0,
     llegaron: 0,
@@ -93,13 +61,11 @@ function multiplicadorVida(numero) {
 export function actualizarOleada(oleada, dtMs) {
   if (oleada.terminada) return oleada;
   oleada.esperaMs -= dtMs;
-  oleada.transcurridoMs += dtMs;
   if (oleada.cola.length && oleada.esperaMs <= 0) {
-    const sale = oleada.cola.shift();
-    const tipo = tipoMonstruo(sale.tipo);
+    const tipo = tipoMonstruo(oleada.cola.shift());
     const vida = Math.round(tipo.vida * multiplicadorVida(oleada.numero));
-    oleada.vivos.push({ id: oleada.siguienteId++, tipo: tipo.id, tecnica: sale.tecnica, vida, vidaMax: vida, avance: 0, golpeMs: 0 });
-    oleada.esperaMs = oleada.intervaloMs;
+    oleada.vivos.push({ id: oleada.siguienteId++, tipo: tipo.id, vida, vidaMax: vida, avance: 0, golpeMs: 0 });
+    oleada.esperaMs = OLEADA.INTERVALO_MS;
   }
   for (const m of oleada.vivos) {
     m.avance += tipoMonstruo(m.tipo).velocidad * (dtMs / 1000);
@@ -108,13 +74,8 @@ export function actualizarOleada(oleada, dtMs) {
   const llegan = oleada.vivos.filter((m) => m.avance >= 1);
   if (llegan.length) {
     oleada.llegaron += llegan.length;
-    if (!oleada.diaria) oleada.vidas = Math.max(0, oleada.vidas - llegan.length);
+    oleada.vidas = Math.max(0, oleada.vidas - llegan.length);
     oleada.vivos = oleada.vivos.filter((m) => m.avance < 1);
-  }
-  if (oleada.diaria && oleada.transcurridoMs >= SESION.DURACION_MS) {
-    oleada.llegaron += oleada.vivos.length + oleada.cola.length;
-    oleada.vivos = [];
-    oleada.cola = [];
   }
   if (oleada.vidas <= 0) {
     oleada.terminada = true;

@@ -7,7 +7,7 @@ export const TIPO_STAT = Object.freeze({ TOTAL_ACUMULADO: "total_acumulado", MEJ
 export const TIPO_PROYECTO = Object.freeze({ PROYECTO: "proyecto", AREA: "area", RECURSO: "recurso", ARCHIVO: "archivo" });
 
 export const PROYECTO = Object.freeze({
-  objetivo: "Aprender a dibujar jugando: tower defense con ejercicios medidos objetivamente, progreso real y 5 minutos diarios sin rachas.",
+  objetivo: "Aprender a dibujar jugando: tower defense con ejercicios medidos objetivamente, progreso real y sin rachas.",
   fase: FASE.CONSTRUCCION,
   fase_estado: ESTADO_FASE.EN_CURSO,
   fases_completadas: 3,
