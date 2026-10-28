@@ -8,7 +8,7 @@ import {
   STATS, cargar, guardar, registrarTrazo, promedioMovil, nivelTecnica, nivelJugador, minimosCapitulo, jefeDesbloqueado,
   tecnicaMasDebil, costoMejora, puedeMejorar, mejorarTorre, completarSesion, registrarOleada, registrarJefe, curva, statsMeta, logrosDe,
 } from "./progress.js";
-import { crearOleada, actualizarOleada, objetivoPrincipal, puntoEnCamino, danoDeTrazo, atacar, tipoMonstruo, efectoMejora } from "./game.js";
+import { crearOleada, actualizarOleada, objetivoPrincipal, elegirObjetivo, puntoEnCamino, danoDeTrazo, atacar, tipoMonstruo, efectoMejora } from "./game.js";
 import { crearEjercicio, escenaJefe } from "./ejercicios.js";
 import { crearTutorial, ACCION_TUTORIAL } from "./tutorial.js";
 
@@ -24,6 +24,9 @@ const COLOR = Object.freeze({
   PAPEL: "#fffdf8",
 });
 const FEEDBACK_MS = 650;
+const TRANSICION_MS = 300;
+const MARCA_MS = 1200;
+const MARCA_MARGEN = 8;
 const MARGEN_PISTA = 10;
 const PROYECTIL_MS = 420;
 const TEXTO_FLOTANTE_MS = 900;
@@ -31,6 +34,11 @@ const TOAST_MS = 3200;
 const DT_MAX_MS = 50;
 const CURVA_DIAS = 30;
 const RADIO_TORRE = 15;
+const CAMPO_BASE = Object.freeze({ W: 340, H: 190, ESCALA_MAX: 1.9 });
+
+function escalaCampo() {
+  return Math.min(CAMPO_BASE.ESCALA_MAX, Math.max(1, Math.min(tamCampo.w / CAMPO_BASE.W, tamCampo.h / CAMPO_BASE.H)));
+}
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -69,6 +77,9 @@ const ui = {
   proyectiles: [],
   textos: [],
   mejorasAbiertas: false,
+  objetivoBloqueado: null,
+  redimPendiente: false,
+  marca: null,
   jefe: { abierto: false, trazos: [], trazo: null, nivel: 1, resultado: null },
 };
 
@@ -137,6 +148,7 @@ function seguirMonstruo() {
 }
 
 function nuevoEjercicio() {
+  if (ui.trazo) return;
   seguirMonstruo();
   pintarPista();
   const pista = $("#pad-hint");
@@ -239,6 +251,58 @@ function pintarPad() {
     pintarEjercicio(ctx, ui.ejercicio, false);
     if (ui.trazo) trazar(ctx, ui.trazo, COLOR.TINTA, 3);
   }
+  pintarMarca(ctx, w, alto);
+}
+
+function pintarMarca(ctx, w, alto) {
+  const m = ui.marca;
+  if (!m) return;
+  const pasado = performance.now() - m.inicio;
+  if (pasado >= MARCA_MS) { ui.marca = null; delete pad.dataset.marca; return; }
+  ctx.save();
+  ctx.globalAlpha = pasado < MARCA_MS * 0.6 ? 1 : 1 - (pasado - MARCA_MS * 0.6) / (MARCA_MS * 0.4);
+  ctx.font = "800 30px -apple-system, system-ui, sans-serif";
+  const anchoGrande = ctx.measureText(m.grande).width;
+  ctx.font = "800 18px -apple-system, system-ui, sans-serif";
+  const anchoExtra = m.extra ? ctx.measureText(m.extra).width + 6 : 0;
+  ctx.font = "600 13px -apple-system, system-ui, sans-serif";
+  const anchoChico = ctx.measureText(m.chico).width;
+  const caja = { w: Math.max(anchoGrande + anchoExtra, anchoChico) + 20, h: 60 };
+  const x = Math.min(w - caja.w - MARCA_MARGEN, Math.max(MARCA_MARGEN, m.x - caja.w / 2));
+  const y = Math.min(alto - caja.h - MARCA_MARGEN, Math.max(MARCA_MARGEN, m.y - caja.h - 14));
+  ctx.fillStyle = "rgba(255,253,248,0.92)";
+  ctx.strokeStyle = m.color;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  if (typeof ctx.roundRect === "function") ctx.roundRect(x, y, caja.w, caja.h, 12);
+  else ctx.rect(x, y, caja.w, caja.h);
+  ctx.fill();
+  ctx.stroke();
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left";
+  ctx.fillStyle = m.color;
+  ctx.font = "800 30px -apple-system, system-ui, sans-serif";
+  const inicioX = x + (caja.w - anchoGrande - anchoExtra) / 2;
+  ctx.fillText(m.grande, inicioX, y + 32);
+  if (m.extra) { ctx.font = "800 18px -apple-system, system-ui, sans-serif"; ctx.fillText(m.extra, inicioX + anchoGrande + 6, y + 31); }
+  ctx.fillStyle = COLOR.TINTA;
+  ctx.font = "600 13px -apple-system, system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(m.chico, x + caja.w / 2, y + 51);
+  ctx.restore();
+  pad.dataset.marca = JSON.stringify({ x: Math.round(x), y: Math.round(y), w: Math.round(caja.w), h: caja.h, grande: m.grande, extra: m.extra, chico: m.chico, cw: w, ch: alto });
+}
+
+function crearMarca(r, dano, golpes, fin, tecnica) {
+  const color = !r.valido || dano === 0 ? COLOR.MAL : r.puntaje >= 0.7 ? COLOR.BIEN : COLOR.TINTA;
+  let grande;
+  if (!r.valido) grande = "muy corto";
+  else if (dano === null) grande = `${Math.round(r.puntaje * 100)}%`;
+  else grande = dano > 0 ? `−${dano}` : "fallo";
+  const met = r.valido ? METRICA_PRINCIPAL[tecnica] : null;
+  let chico = r.valido ? `Puntaje ${Math.round(r.puntaje * 100)}%` : "Traza más largo";
+  if (met && Number.isFinite(r[met.clave])) chico += ` · ${met.etiqueta.split(" ")[0]} ${fmt(r[met.clave])}${met.unidad}`;
+  ui.marca = { x: fin.x, y: fin.y, grande, extra: golpes > 1 ? `×${golpes}` : "", chico, color, inicio: performance.now() };
 }
 
 function evaluar(ej, puntos) {
@@ -284,36 +348,48 @@ function terminarTrazo(puntos) {
   if (!ej) return;
   const r = evaluar(ej, puntos);
   let dano = null;
+  let golpes = 0;
   const enTutorial = tutorial.activo();
   if (r.valido && !enTutorial) {
     registrarTrazo(estado, ej.tecnica, r, new Date());
     if (ui.modo === MODO.OLEADA && ui.oleada && !ui.oleada.terminada) {
       const mejora = estado.mejoras[ej.tecnica];
       dano = danoDeTrazo(ej.tecnica, r.puntaje, mejora);
-      const objetivo = objetivoPrincipal(ui.oleada);
+      const objetivo = elegirObjetivo(ui.oleada, ui.objetivoBloqueado, ej.tecnica);
       if (objetivo && dano <= 0) {
         const destino = posMonstruo(objetivo);
-        ui.textos.push({ x: destino.x, y: destino.y - 18, texto: "fallo", inicio: performance.now(), color: COLOR.MAL });
+        ui.textos.push({ x: destino.x, y: destino.y - 18 * escalaCampo(), texto: "fallo", inicio: performance.now(), color: COLOR.MAL });
       } else if (objetivo) {
-        const golpe = atacar(ui.oleada, dano, efectoMejora(mejora).objetivos);
+        const golpe = atacar(ui.oleada, dano, efectoMejora(mejora).objetivos, objetivo);
+        golpes = golpe.golpes.length;
         for (const g of golpe.golpes) {
           const destino = posMonstruo(g.objetivo);
           ui.proyectiles.push({ desde: posTorre(ej.tecnica), hasta: destino, inicio: performance.now() });
-          ui.textos.push({ x: destino.x, y: destino.y - 18, texto: `−${dano}`, inicio: performance.now(), color: COLOR.TINTA });
-          if (g.vencido) ui.textos.push({ x: destino.x, y: destino.y + 6, texto: `+${OLEADA.TINTA_POR_MONSTRUO}`, inicio: performance.now(), color: COLOR.ACENTO });
+          ui.textos.push({ x: destino.x, y: destino.y - 18 * escalaCampo(), texto: `−${dano}`, inicio: performance.now(), color: COLOR.TINTA });
+          if (g.vencido) ui.textos.push({ x: destino.x, y: destino.y + 6 * escalaCampo(), texto: `+${OLEADA.TINTA_POR_MONSTRUO}`, inicio: performance.now(), color: COLOR.ACENTO });
         }
       }
     }
     persistir();
     pintarTorres();
   }
+  ui.objetivoBloqueado = null;
+  crearMarca(r, dano, golpes, puntos[puntos.length - 1], ej.tecnica);
   pintarLectura(r, dano);
   if (enTutorial) tutorial.trazoHecho(r.valido);
   ui.feedback = r.valido ? { ejercicio: ej, trazo: puntos, color: r.puntaje >= 0.7 ? COLOR.BIEN : r.puntaje < 0.4 ? COLOR.MAL : COLOR.TINTA } : null;
   ui.bloqueoHasta = performance.now() + (r.valido ? FEEDBACK_MS : 0);
   pintarPad();
-  if (r.valido) setTimeout(() => { ui.feedback = null; nuevoEjercicio(); }, FEEDBACK_MS);
+  if (r.valido) setTimeout(siguienteEjercicio, FEEDBACK_MS);
+  if (ui.redimPendiente) { ui.redimPendiente = false; redimensionar(); }
   pintarHud();
+}
+
+function siguienteEjercicio() {
+  if (ui.trazo) return;
+  ui.feedback = null;
+  nuevoEjercicio();
+  if (typeof pad.animate === "function") pad.animate([{ opacity: 0.15 }, { opacity: 1 }], { duration: TRANSICION_MS, easing: "ease-out" });
 }
 
 function conectarLienzo(canvas, { puede, empezar, mover, terminar }) {
@@ -347,7 +423,14 @@ function conectarLienzo(canvas, { puede, empezar, mover, terminar }) {
 
 conectarLienzo(pad, {
   puede: () => performance.now() >= ui.bloqueoHasta && (!tutorial.activo() || tutorial.esperaTrazo()),
-  empezar(p) { ui.feedback = null; ui.trazo = [p]; pintarPad(); },
+  empezar(p) {
+    ui.feedback = null;
+    ui.marca = null;
+    const objetivo = ui.modo === MODO.OLEADA && ui.oleada ? objetivoPrincipal(ui.oleada) : null;
+    ui.objetivoBloqueado = objetivo ? objetivo.id : null;
+    ui.trazo = [p];
+    pintarPad();
+  },
   mover(p) {
     if (!ui.trazo) return;
     const ult = ui.trazo[ui.trazo.length - 1];
@@ -358,7 +441,12 @@ conectarLienzo(pad, {
   terminar(cancelado) {
     const puntos = ui.trazo;
     ui.trazo = null;
-    if (cancelado || !puntos) { pintarPad(); return; }
+    if (cancelado || !puntos) {
+      ui.objetivoBloqueado = null;
+      if (ui.redimPendiente) { ui.redimPendiente = false; redimensionar(); }
+      pintarPad();
+      return;
+    }
     terminarTrazo(puntos);
   },
 });
@@ -458,36 +546,46 @@ function pintarCampo(ahora) {
   ctx.clearRect(0, 0, w, alto);
   ctx.fillStyle = "#efe9dc";
   ctx.fillRect(0, 0, w, alto);
+  const s = escalaCampo();
   const pts = CAMINO.map(([x, y]) => [x * w, y * alto]);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   for (const [color, ancho] of [[COLOR.CAMINO_BORDE, 30], [COLOR.CAMINO, 26]]) {
     ctx.strokeStyle = color;
-    ctx.lineWidth = ancho;
+    ctx.lineWidth = ancho * s;
     ctx.beginPath();
     pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
     ctx.stroke();
   }
-  const [bx, by] = pts[pts.length - 1];
+  const [bxReal, by] = pts[pts.length - 1];
+  const bx = Math.min(bxReal, w - 30 * s);
+  ctx.save();
+  ctx.translate(bx, by);
+  ctx.scale(s, s);
   ctx.fillStyle = COLOR.PAPEL;
   ctx.strokeStyle = COLOR.TINTA;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  if (typeof ctx.roundRect === "function") ctx.roundRect(bx - 4, by - 20, 30, 40, 4);
-  else ctx.rect(bx - 4, by - 20, 30, 40);
+  if (typeof ctx.roundRect === "function") ctx.roundRect(-4, -20, 30, 40, 4);
+  else ctx.rect(-4, -20, 30, 40);
   ctx.fill();
   ctx.stroke();
   ctx.strokeStyle = COLOR.TENUE;
-  for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(bx + 2, by - 10 + i * 7); ctx.lineTo(bx + 20, by - 10 + i * 7); ctx.stroke(); }
+  for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(2, -10 + i * 7); ctx.lineTo(20, -10 + i * 7); ctx.stroke(); }
+  ctx.restore();
   if (ui.oleada) {
     ctx.fillStyle = COLOR.TINTA;
-    ctx.font = "600 12px -apple-system, system-ui, sans-serif";
+    ctx.font = `600 ${Math.round(12 * s)}px -apple-system, system-ui, sans-serif`;
     ctx.textAlign = "center";
-    ctx.fillText(`♥ ${ui.oleada.vidas}`, Math.min(w - 18, bx + 11), Math.min(alto - 6, by + 36));
+    ctx.fillText(`♥ ${ui.oleada.vidas}`, Math.min(w - 18 * s, bx + 11 * s), Math.min(alto - 6, by + 36 * s));
     ctx.textAlign = "start";
   }
   for (const t of TECNICAS) {
-    const p = posTorre(t);
+    const p = { x: 0, y: 0 };
+    const real = posTorre(t);
+    ctx.save();
+    ctx.translate(real.x, real.y);
+    ctx.scale(s, s);
     punto(ctx, p, RADIO_TORRE + 3, ui.tecnica === t ? "rgba(75,91,214,0.22)" : "rgba(31,29,43,0.06)");
     punto(ctx, p, RADIO_TORRE, COLOR.PAPEL);
     ctx.strokeStyle = ui.tecnica === t ? COLOR.ACENTO : COLOR.TINTA;
@@ -500,7 +598,7 @@ function pintarCampo(ahora) {
     else if (t === TECNICA.ELIPSE) ctx.ellipse(p.x, p.y, 8, 5, 0, 0, Math.PI * 2);
     else { ctx.moveTo(p.x - 8, p.y + 6); ctx.lineTo(p.x, p.y - 5); ctx.lineTo(p.x + 8, p.y + 6); }
     ctx.stroke();
-    ctx.globalAlpha = 1;
+    ctx.restore();
   }
   if (ui.oleada) {
     for (const m of ui.oleada.vivos) {
@@ -509,6 +607,7 @@ function pintarCampo(ahora) {
       const r = tipo.radio;
       ctx.save();
       ctx.translate(p.x, p.y);
+      ctx.scale(s, s);
       ctx.beginPath();
       for (let i = 0; i <= 16; i++) {
         const a = (i / 16) * Math.PI * 2;
@@ -536,25 +635,25 @@ function pintarCampo(ahora) {
   for (const pr of ui.proyectiles) {
     const f = Math.min(1, (ahora - pr.inicio) / (PROYECTIL_MS * 0.5));
     ctx.globalAlpha = 1 - Math.max(0, (ahora - pr.inicio) / PROYECTIL_MS - 0.5) * 2;
-    trazar(ctx, [pr.desde, { x: pr.desde.x + (pr.hasta.x - pr.desde.x) * f, y: pr.desde.y + (pr.hasta.y - pr.desde.y) * f }], COLOR.ACENTO, 3);
+    trazar(ctx, [pr.desde, { x: pr.desde.x + (pr.hasta.x - pr.desde.x) * f, y: pr.desde.y + (pr.hasta.y - pr.desde.y) * f }], COLOR.ACENTO, 3 * s);
     ctx.globalAlpha = 1;
   }
   ui.textos = ui.textos.filter((t) => ahora - t.inicio < TEXTO_FLOTANTE_MS);
-  ctx.font = "700 13px -apple-system, system-ui, sans-serif";
+  ctx.font = `700 ${Math.round(13 * s)}px -apple-system, system-ui, sans-serif`;
   ctx.textAlign = "center";
   for (const t of ui.textos) {
     const f = (ahora - t.inicio) / TEXTO_FLOTANTE_MS;
     ctx.globalAlpha = 1 - f;
     ctx.fillStyle = t.color;
-    ctx.fillText(t.texto, t.x, t.y - f * 16);
+    ctx.fillText(t.texto, t.x, t.y - f * 16 * s);
   }
   ctx.globalAlpha = 1;
   ctx.textAlign = "start";
   if (!ui.oleada) {
     ctx.fillStyle = "rgba(31,29,43,0.55)";
-    ctx.font = "13px -apple-system, system-ui, sans-serif";
+    ctx.font = `${Math.round(13 * s)}px -apple-system, system-ui, sans-serif`;
     ctx.textAlign = "center";
-    ctx.fillText("Sin oleada: pulsa Oleada", w / 2, alto - 10);
+    ctx.fillText("Sin oleada: pulsa Oleada", w / 2, alto - 10 * s);
     ctx.textAlign = "start";
   }
 }
@@ -575,7 +674,10 @@ function bucle(ahora) {
       if (!ui.trazo && !ui.feedback && ahora >= ui.bloqueoHasta && pedida && pedida !== ui.tecnica) nuevoEjercicio();
     }
   }
-  if (ui.pantalla === PANTALLA.JUGAR) pintarCampo(ahora);
+  if (ui.pantalla === PANTALLA.JUGAR) {
+    pintarCampo(ahora);
+    if (ui.marca) pintarPad();
+  }
   requestAnimationFrame(bucle);
 }
 
@@ -920,6 +1022,7 @@ function abrirTutorial() {
 
 function redimensionar() {
   if (ui.pantalla !== PANTALLA.JUGAR) return;
+  if (ui.trazo) { ui.redimPendiente = true; return; }
   const antesW = tamPad.w;
   const antesH = tamPad.h;
   tamCampo = ajustarCanvas(campo);

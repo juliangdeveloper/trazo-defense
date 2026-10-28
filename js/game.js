@@ -127,8 +127,17 @@ export function objetivosDelFrente(oleada, cantidad = 1) {
   return [...oleada.vivos].sort((a, b) => b.avance - a.avance).slice(0, Math.max(1, cantidad));
 }
 
-export function atacar(oleada, dano, cantidad = 1) {
-  const objetivos = objetivosDelFrente(oleada, cantidad);
+export function elegirObjetivo(oleada, idBloqueado, tecnica) {
+  const bloqueado = oleada.vivos.find((m) => m.id === idBloqueado);
+  if (bloqueado) return bloqueado;
+  const frente = [...oleada.vivos].sort((a, b) => b.avance - a.avance);
+  return frente.find((m) => m.tecnica === tecnica) || frente[0] || null;
+}
+
+export function atacar(oleada, dano, cantidad = 1, primero = null) {
+  const inicial = primero && oleada.vivos.includes(primero) ? [primero] : [];
+  const resto = objetivosDelFrente(oleada, oleada.vivos.length).filter((m) => m !== primero);
+  const objetivos = [...inicial, ...resto].slice(0, Math.max(1, cantidad));
   if (!objetivos.length || dano <= 0) return { golpes: [], dano: 0 };
   const golpes = objetivos.map((objetivo) => {
     objetivo.vida -= dano;
