@@ -8,7 +8,7 @@ export const PASOS = Object.freeze([
   Object.freeze({ id: "torres", foco: "#torres", titulo: "Tres torres, tres ejercicios", texto: "Línea, elipse y perspectiva, como la lección 1 de Drawabox, están en el campo junto a tu cuaderno. En perspectiva cierras un cubo con 3 rectas hacia el punto de fuga. Fuera de una oleada toca una torre para practicarla.", accion: ACCION_TUTORIAL.NINGUNA }),
   Object.freeze({ id: "mezcla", foco: "#campo-wrap", titulo: "Cada monstruo pide una técnica", texto: "En una oleada los monstruos llegan mezclados y llevan el icono de su técnica, con algo más de la que peor te sale. El que va primero elige la torre y el ejercicio: tú solo dibujas.", accion: ACCION_TUTORIAL.NINGUNA }),
   Object.freeze({ id: "cola", foco: "#cola", titulo: "Lo que viene", texto: "«Luego» muestra la técnica de los monstruos que siguen en la fila: son tus próximos ejercicios cuando cae el de adelante.", accion: ACCION_TUTORIAL.NINGUNA }),
-  Object.freeze({ id: "mejoras", foco: "#torres", titulo: "La tinta compra mejoras", texto: "Cada torre muestra su mejora (M0) y un + con su costo en tinta. Toca el + o, en plena oleada, la torre misma: mejora ahí y cambia de aspecto. Son 5 mejoras: más daño o más objetivos. Ganas tinta venciendo monstruos, al jefe y con la primera oleada de cada día. Un mal trazo hace poco aunque la torre esté mejorada.", accion: ACCION_TUTORIAL.NINGUNA }),
+  Object.freeze({ id: "mejoras", foco: ".torre[data-torre='linea'] .torre-btn", titulo: "La tinta compra mejoras", texto: "Cada torre está en su ficha: arriba su mejora (M0) y abajo, dentro de la misma ficha, un + con su costo en tinta. En plena oleada toca cualquier parte de la ficha para mejorarla; fuera de una oleada toca el +. La torre cambia de aspecto y en gris te avisa que falta tinta. Son 5 mejoras: más daño o más objetivos. Ganas tinta venciendo monstruos, al jefe y con la primera oleada de cada día. Un mal trazo hace poco aunque la torre esté mejorada.", accion: ACCION_TUTORIAL.NINGUNA }),
   Object.freeze({ id: "jefe", foco: "#btn-jefe", titulo: "El jefe y sus puntos débiles", texto: "Cuando cumples los mínimos del capítulo, aparece el jefe. Dibujas una caja en perspectiva y él tiene 4 puntos débiles medibles: horizonte, líneas de fuga, cara frontal y seguridad. Al final ves cuánto te faltó en cada uno.", accion: ACCION_TUTORIAL.NINGUNA }),
   Object.freeze({ id: "progreso", foco: "[data-tab='progreso']", titulo: "Tu nivel es tu dibujo", texto: "El nivel de cada técnica sale del promedio de tus últimos 20 trazos, no de las horas jugadas. En Progreso ves la curva día a día. Puedes repetir este tutorial desde Ajustes.", accion: ACCION_TUTORIAL.NINGUNA }),
 ]);
@@ -27,6 +27,7 @@ export function crearTutorial({ raiz, alTerminar, alEntrarPaso }) {
 
   function limpiarFoco() {
     if (foco) foco.classList.remove("tuto-foco");
+    for (const el of document.querySelectorAll(".tuto-foco")) el.classList.remove("tuto-foco");
     foco = null;
   }
 

@@ -27,6 +27,10 @@ const FEEDBACK_MS = 650;
 const TRANSICION_MS = 300;
 const MARCA_MS = 1200;
 const MARCA_MARGEN = 8;
+const MARCA_SEPARACION = 14;
+const MARCA_EVITA_FUGA = 16;
+const MARCA_PESO_FUGA = 1000;
+const ETIQUETA_HORIZONTE = Object.freeze({ TEXTO: "horizonte", FUENTE: "11px -apple-system, system-ui, sans-serif", MARGEN: 8, ALTO: 18 });
 const MARGEN_PISTA = 10;
 const PROYECTIL_MS = 420;
 const TEXTO_FLOTANTE_MS = 900;
@@ -271,10 +275,10 @@ function pintarCubo(ctx, ej, mostrarIdeal) {
   ctx.lineTo(tamPad.w, ej.fuga.y);
   ctx.stroke();
   ctx.fillStyle = COLOR.TENUE;
-  ctx.font = "11px -apple-system, system-ui, sans-serif";
+  ctx.font = ETIQUETA_HORIZONTE.FUENTE;
   ctx.textAlign = ej.fuga.x > tamPad.w / 2 ? "left" : "right";
   ctx.textBaseline = "top";
-  ctx.fillText("horizonte", ej.fuga.x > tamPad.w / 2 ? 8 : tamPad.w - 8, ej.fuga.y + 4);
+  ctx.fillText(ETIQUETA_HORIZONTE.TEXTO, ej.fuga.x > tamPad.w / 2 ? ETIQUETA_HORIZONTE.MARGEN : tamPad.w - ETIQUETA_HORIZONTE.MARGEN, ej.fuga.y + 4);
   ctx.textAlign = "start";
   ctx.textBaseline = "alphabetic";
   const aristas = aristasCubo(ej);
@@ -337,8 +341,7 @@ function pintarMarca(ctx, w, alto) {
   ctx.font = "600 13px -apple-system, system-ui, sans-serif";
   const anchoChico = ctx.measureText(m.chico).width;
   const caja = { w: Math.max(anchoGrande + anchoExtra, anchoChico) + 20, h: 60 };
-  const x = Math.min(w - caja.w - MARCA_MARGEN, Math.max(MARCA_MARGEN, m.x - caja.w / 2));
-  const y = Math.min(alto - caja.h - MARCA_MARGEN, Math.max(MARCA_MARGEN, m.y - caja.h - 14));
+  const { x, y } = posicionMarca(ctx, m, caja, w, alto);
   ctx.fillStyle = "rgba(255,253,248,0.92)";
   ctx.strokeStyle = m.color;
   ctx.lineWidth = 1.5;
@@ -360,6 +363,39 @@ function pintarMarca(ctx, w, alto) {
   ctx.fillText(m.chico, x + caja.w / 2, y + 51);
   ctx.restore();
   pad.dataset.marca = JSON.stringify({ x: Math.round(x), y: Math.round(y), w: Math.round(caja.w), h: caja.h, grande: m.grande, extra: m.extra, chico: m.chico, cw: w, ch: alto });
+}
+
+function zonasLibres(ctx, w) {
+  const ej = ui.feedback ? ui.feedback.ejercicio : ui.ejercicio;
+  if (!ej || ej.tecnica !== TECNICA.PERSPECTIVA) return [];
+  ctx.font = ETIQUETA_HORIZONTE.FUENTE;
+  const ancho = ctx.measureText(ETIQUETA_HORIZONTE.TEXTO).width;
+  const izq = ej.fuga.x > w / 2;
+  const lx = izq ? ETIQUETA_HORIZONTE.MARGEN : w - ETIQUETA_HORIZONTE.MARGEN - ancho;
+  const r = MARCA_EVITA_FUGA;
+  const esquinas = [...ej.frente, ...ej.fondo];
+  const xs = esquinas.map((p) => p.x);
+  const ys = esquinas.map((p) => p.y);
+  const cubo = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys), peso: 1 };
+  return [
+    { x: ej.fuga.x - r, y: ej.fuga.y - r, w: r * 2, h: r * 2, peso: MARCA_PESO_FUGA },
+    { x: lx, y: ej.fuga.y, w: ancho, h: ETIQUETA_HORIZONTE.ALTO, peso: MARCA_PESO_FUGA },
+    cubo,
+  ];
+}
+
+function posicionMarca(ctx, m, caja, w, alto) {
+  const fijar = (x, y) => ({ x: Math.min(w - caja.w - MARCA_MARGEN, Math.max(MARCA_MARGEN, x)), y: Math.min(alto - caja.h - MARCA_MARGEN, Math.max(MARCA_MARGEN, y)) });
+  const opciones = [
+    fijar(m.x - caja.w / 2, m.y - caja.h - MARCA_SEPARACION),
+    fijar(m.x - caja.w / 2, m.y + MARCA_SEPARACION),
+    fijar(m.x - caja.w - MARCA_SEPARACION, m.y - caja.h / 2),
+    fijar(m.x + MARCA_SEPARACION, m.y - caja.h / 2),
+  ];
+  const zonas = zonasLibres(ctx, w);
+  const cruce = (o, z) => Math.max(0, Math.min(o.x + caja.w, z.x + z.w) - Math.max(o.x, z.x)) * Math.max(0, Math.min(o.y + caja.h, z.y + z.h) - Math.max(o.y, z.y)) * z.peso;
+  const costo = (o) => zonas.reduce((t, z) => t + cruce(o, z), 0);
+  return opciones.reduce((mejor, o) => (costo(o) < costo(mejor) ? o : mejor), opciones[0]);
 }
 
 function crearMarca(r, dano, golpes, fin, tecnica) {
@@ -402,11 +438,11 @@ function pintarLectura(r, dano) {
 }
 
 function posTorre(t) {
-  const el = torresEl.querySelector(`.torre-btn[data-tecnica="${t}"]`);
+  const el = torresEl.querySelector(`.torre-btn[data-tecnica="${t}"] svg`);
   if (!el) return { x: tamCampo.w / 2, y: tamCampo.h };
   const base = campo.getBoundingClientRect();
   const r = el.getBoundingClientRect();
-  return { x: r.left + r.width / 2 - base.left, y: r.top + Math.min(r.height, r.width) / 2 - base.top };
+  return { x: r.left + r.width / 2 - base.left, y: r.top + r.height / 2 - base.top };
 }
 
 function posMonstruo(m) {
@@ -619,41 +655,52 @@ function textoCompra(t) {
 }
 
 function refrescarCompra() {
-  for (const b of document.querySelectorAll("[data-mejorar]")) b.disabled = !puedeMejorar(estado, b.dataset.mejorar);
-  for (const c of document.querySelectorAll(".torre[data-torre]")) c.classList.toggle("sin-tinta", !puedeMejorar(estado, c.dataset.torre));
+  for (const c of document.querySelectorAll(".torre[data-torre]")) {
+    const puede = puedeMejorar(estado, c.dataset.torre);
+    c.classList.toggle("sin-tinta", !puede);
+    const pill = c.querySelector(".mejora-btn");
+    if (pill) pill.classList.toggle("sin-tinta", !puede);
+  }
+}
+
+function pastillaMejora(t, costo, puede) {
+  const maximo = costo === null;
+  const pill = h("span", { class: "mejora-btn" + (maximo ? " maximo" : "") + (puede ? "" : " sin-tinta"), "data-mejorar": t, "aria-hidden": "true" });
+  if (maximo) pill.append(h("span", { class: "mas", text: "Máx" }));
+  else pill.append(h("span", { class: "mas", text: "+" }), h("small", { text: String(costo) }));
+  return pill;
+}
+
+function tocarTorre(t, e) {
+  if (ui.modo === MODO.OLEADA || e.target.closest(".mejora-btn")) comprarMejora(t);
+  else elegirTorre(t);
 }
 
 function pintarTorres() {
   const ahora = performance.now();
   const aviso = ui.avisoMejora && ahora - ui.avisoMejora.inicio < AVISO_MEJORA_MS ? ui.avisoMejora : null;
   const oleada = ui.modo === MODO.OLEADA;
+  const enfocada = torresEl.querySelector(".torre-btn.tuto-foco");
+  const tecnicaEnfocada = enfocada ? enfocada.dataset.tecnica : null;
   torresEl.replaceChildren(...TECNICAS.map((t) => {
     const torre = TORRE[t];
     const mejora = estado.mejoras[t];
     const costo = costoMejora(estado, t);
-    const maximo = costo === null;
+    const puede = puedeMejorar(estado, t);
     const elegida = ui.tecnica === t;
-    const cuerpo = h("button", {
+    const marco = h("button", {
       type: "button",
       class: "torre-btn",
       "aria-pressed": String(elegida),
       "data-tecnica": t,
-      "aria-label": oleada ? `${torre.nombre}, M${mejora}. ${textoCompra(t)}` : `${torre.nombre}, M${mejora}. Practicar ${torre.corto.toLowerCase()}`,
-      onclick: () => (ui.modo === MODO.OLEADA ? comprarMejora(t) : elegirTorre(t)),
+      "aria-label": oleada ? `${torre.nombre}, M${mejora}. ${textoCompra(t)}` : `${torre.nombre}, M${mejora}. Practicar ${torre.corto.toLowerCase()}. ${textoCompra(t)} con el +`,
+      onclick: (e) => tocarTorre(t, e),
     });
-    cuerpo.innerHTML = spriteTorre(t, mejora, elegida);
-    cuerpo.append(h("span", { class: "torre-nivel", text: `M${mejora}` }), h("span", { class: "torre-nombre", text: torre.corto }));
-    const mejorar = h("button", {
-      type: "button",
-      class: "mejora-btn" + (maximo ? " maximo" : ""),
-      "data-mejorar": t,
-      disabled: !puedeMejorar(estado, t),
-      "aria-label": textoCompra(t),
-      onclick: () => comprarMejora(t),
-    });
-    if (maximo) mejorar.append(h("span", { class: "mas", text: "Máx" }));
-    else mejorar.append(h("span", { class: "mas", text: "+" }), h("small", { text: String(costo) }));
-    const celda = h("div", { class: "torre" + (puedeMejorar(estado, t) ? "" : " sin-tinta"), "data-torre": t, "data-nivel": String(mejora) }, cuerpo, mejorar);
+    marco.innerHTML = spriteTorre(t, mejora, elegida);
+    marco.prepend(h("span", { class: "torre-nivel", text: `M${mejora}` }));
+    marco.append(h("span", { class: "torre-nombre", text: torre.corto }), pastillaMejora(t, costo, puede));
+    if (tecnicaEnfocada === t) marco.classList.add("tuto-foco");
+    const celda = h("div", { class: "torre" + (puede ? "" : " sin-tinta") + (costo === null ? " maximo" : ""), "data-torre": t, "data-nivel": String(mejora) }, marco);
     if (aviso && aviso.tecnica === t) celda.append(h("span", { class: "torre-aviso" + (aviso.falla ? " falla" : ""), role: "status", text: aviso.texto }));
     return celda;
   }));
