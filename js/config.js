@@ -1,5 +1,5 @@
 export const APP_ID = "trazo-defense";
-export const APP_VERSION = "0.1.1";
+export const APP_VERSION = "0.1.2";
 export const SAVE_KEY = "trazo-defense.save";
 export const SAVE_VERSION = 1;
 export const CACHE_PREFIX = "trazo-defense-";
@@ -86,7 +86,7 @@ export const JEFE = Object.freeze({
 export const SESION = Object.freeze({
   MINUTOS: 5,
   DURACION_MS: 300000,
-  CAMINO_MS: 42000,
+  MARGEN_FINAL_MS: 15000,
   MONSTRUOS: 40,
   PESO_DEBIL: 0.6,
   BONUS_TINTA: 40,

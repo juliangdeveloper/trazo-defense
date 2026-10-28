@@ -55,7 +55,7 @@ export function crearOleadaDia({ disponibles, debil, nivel = 1 }) {
   const oleada = crearOleada(Math.max(1, Math.floor(nivel)));
   oleada.diaria = true;
   oleada.cola = tecnicas.map((tecnica, i) => ({ tipo: tipoEnPosicion(i + 1, true), tecnica }));
-  oleada.intervaloMs = (SESION.DURACION_MS - SESION.CAMINO_MS) / Math.max(1, tecnicas.length - 1);
+  oleada.intervaloMs = (SESION.DURACION_MS - SESION.MARGEN_FINAL_MS) / Math.max(1, tecnicas.length - 1);
   return oleada;
 }
 
@@ -110,6 +110,11 @@ export function actualizarOleada(oleada, dtMs) {
     oleada.llegaron += llegan.length;
     if (!oleada.diaria) oleada.vidas = Math.max(0, oleada.vidas - llegan.length);
     oleada.vivos = oleada.vivos.filter((m) => m.avance < 1);
+  }
+  if (oleada.diaria && oleada.transcurridoMs >= SESION.DURACION_MS) {
+    oleada.llegaron += oleada.vivos.length + oleada.cola.length;
+    oleada.vivos = [];
+    oleada.cola = [];
   }
   if (oleada.vidas <= 0) {
     oleada.terminada = true;
