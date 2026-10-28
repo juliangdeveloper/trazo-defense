@@ -8,7 +8,7 @@ import {
   STATS, cargar, guardar, registrarTrazo, promedioMovil, nivelTecnica, nivelJugador, tecnicaMasDebil, minimosCapitulo, jefeDesbloqueado,
   puedeComprarTorre, comprarTorre, bonusDisponible, completarSesion, registrarOleada, registrarJefe, curva, statsMeta, logrosDe,
 } from "./progress.js";
-import { crearOleada, actualizarOleada, objetivoPrincipal, puntoEnCamino, danoDeTrazo, atacar, tipoMonstruo } from "./game.js";
+import { crearOleada, crearOleadaDia, restanteMs, actualizarOleada, objetivoPrincipal, puntoEnCamino, danoDeTrazo, atacar, tipoMonstruo } from "./game.js";
 import { crearEjercicio, escenaJefe } from "./ejercicios.js";
 import { crearTutorial, ACCION_TUTORIAL } from "./tutorial.js";
 
@@ -66,7 +66,6 @@ const ui = {
   oleada: null,
   numeroOleada: 1,
   sesion: false,
-  calentamiento: 0,
   proyectiles: [],
   textos: [],
   jefe: { abierto: false, trazos: [], trazo: null, nivel: 1, resultado: null },
@@ -122,7 +121,23 @@ function pintarTinta() {
   $("#tinta-valor").textContent = String(Math.round(estado.tinta));
 }
 
+function tecnicaPedida() {
+  if (!ui.oleada || !ui.oleada.diaria) return null;
+  const objetivo = objetivoPrincipal(ui.oleada);
+  const t = objetivo ? objetivo.tecnica : ui.oleada.cola.length ? ui.oleada.cola[0].tecnica : null;
+  return t && estado.torres[t] ? t : null;
+}
+
+function seguirMonstruo() {
+  const t = tecnicaPedida();
+  if (!t || t === ui.tecnica) return false;
+  ui.tecnica = t;
+  pintarTorres();
+  return true;
+}
+
 function nuevoEjercicio() {
+  seguirMonstruo();
   ui.ejercicio = crearEjercicio(ui.tecnica, tamPad.w, tamPad.h);
   pad.dataset.ejercicio = JSON.stringify(ui.ejercicio);
   pintarPad();
@@ -276,9 +291,6 @@ function terminarTrazo(puntos) {
         ui.textos.push({ x: destino.x, y: destino.y - 18, texto: dano > 0 ? `−${dano}` : "fallo", inicio: performance.now(), color: dano > 0 ? COLOR.TINTA : COLOR.MAL });
         if (golpe.vencido) ui.textos.push({ x: destino.x, y: destino.y + 6, texto: `+${OLEADA.TINTA_POR_MONSTRUO}`, inicio: performance.now(), color: COLOR.ACENTO });
       }
-    } else if (ui.modo === MODO.CALENTAMIENTO) {
-      ui.calentamiento = Math.max(0, ui.calentamiento - 1);
-      if (ui.calentamiento === 0) setTimeout(iniciarOleada, FEEDBACK_MS);
     }
     persistir();
     pintarTorres();
@@ -367,12 +379,12 @@ function elegirTorre(t) {
       persistir();
       toast(`${TORRE[t].nombre} construida: −${TORRE[t].costoTinta} tinta.`);
     } else {
-      toast(`Necesitas ${TORRE[t].costoTinta} tinta. Se gana venciendo monstruos y con la sesión de hoy.`);
+      toast(`Necesitas ${TORRE[t].costoTinta} tinta. Se gana venciendo monstruos y con la oleada del día.`);
       return;
     }
   }
-  if (ui.modo === MODO.CALENTAMIENTO && t !== ui.tecnica) {
-    toast("Durante el calentamiento practicas tu técnica más débil.");
+  if (ui.oleada && ui.oleada.diaria && t !== ui.tecnica) {
+    toast("En la oleada del día, la torre la elige el monstruo que va primero.");
     return;
   }
   ui.tecnica = t;
@@ -387,17 +399,19 @@ function pintarHud() {
   const ola = $("#btn-oleada");
   const jefe = $("#btn-jefe");
   const hoyHecho = !bonusDisponible(estado, new Date());
-  if (ui.modo === MODO.OLEADA && ui.oleada) {
+  if (ui.modo === MODO.OLEADA && ui.oleada && ui.oleada.diaria) {
+    const o = ui.oleada;
+    const s = Math.ceil(restanteMs(o) / 1000);
+    est.textContent = `Oleada del día · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${o.vencidos} vencidos`;
+  } else if (ui.modo === MODO.OLEADA && ui.oleada) {
     const o = ui.oleada;
     est.textContent = `Oleada ${o.numero} · ${o.vidas} vidas · quedan ${o.cola.length + o.vivos.length}`;
-  } else if (ui.modo === MODO.CALENTAMIENTO) {
-    est.textContent = `Calentamiento · ${TORRE[ui.tecnica].corto} ${SESION.CALENTAMIENTO_TRAZOS - ui.calentamiento}/${SESION.CALENTAMIENTO_TRAZOS}`;
   } else {
-    est.textContent = hoyHecho ? `Sesión de hoy completa · nivel ${nivelJugador(estado)}` : `Práctica libre · nivel ${nivelJugador(estado)}`;
+    est.textContent = hoyHecho ? `Oleada del día hecha · nivel ${nivelJugador(estado)}` : `Práctica libre · nivel ${nivelJugador(estado)}`;
   }
   const ocupado = ui.modo !== MODO.LIBRE;
   ses.disabled = ocupado;
-  ses.textContent = hoyHecho ? "Otra sesión" : "Sesión de hoy";
+  ses.textContent = "Oleada del día";
   ses.classList.toggle("primary", !hoyHecho && !ocupado);
   ola.disabled = ocupado;
   const abierto = jefeDesbloqueado(estado);
@@ -409,15 +423,18 @@ function pintarHud() {
 
 function iniciarSesion() {
   if (ui.modo !== MODO.LIBRE) return;
+  const debil = tecnicaMasDebil(estado);
   ui.sesion = true;
-  ui.modo = MODO.CALENTAMIENTO;
-  ui.calentamiento = SESION.CALENTAMIENTO_TRAZOS;
-  ui.tecnica = tecnicaMasDebil(estado);
-  ui.sesionInicio = Date.now();
+  ui.modo = MODO.OLEADA;
+  ui.oleada = crearOleadaDia({ disponibles: TECNICAS.filter((t) => estado.torres[t]), debil, nivel: nivelJugador(estado) });
+  ui.proyectiles = [];
+  ui.textos = [];
+  ui.tecnica = debil;
+  ui.feedback = null;
   pintarTorres();
   nuevoEjercicio();
   pintarHud();
-  toast(`Calentamiento con ${TORRE[ui.tecnica].corto.toLowerCase()}: ${SESION.CALENTAMIENTO_TRAZOS} trazos y luego una oleada. Unos ${SESION.MINUTOS} minutos.`);
+  toast(`Oleada del día: unos ${SESION.MINUTOS} minutos. La mayoría de monstruos piden ${TORRE[debil].corto.toLowerCase()}, tu técnica más débil. La torre la elige el monstruo que va primero.`);
 }
 
 function iniciarOleada() {
@@ -433,11 +450,15 @@ function iniciarOleada() {
 function terminarOleada() {
   const o = ui.oleada;
   registrarOleada(estado, { ganada: o.ganada, monstruos: o.vencidos, tinta: o.tinta });
-  let mensaje = o.ganada ? `Oleada ${o.numero} superada: +${o.tinta} tinta.` : `La oleada ${o.numero} llegó a tu cuaderno. No pierdes nada: vuelve a intentarlo.`;
-  if (o.ganada) ui.numeroOleada += 1;
+  let mensaje;
+  if (o.diaria) mensaje = `Oleada del día terminada: ${o.vencidos} vencidos, ${o.llegaron} escaparon. +${o.tinta} tinta.`;
+  else {
+    mensaje = o.ganada ? `Oleada ${o.numero} superada: +${o.tinta} tinta.` : `La oleada ${o.numero} llegó a tu cuaderno. No pierdes nada: vuelve a intentarlo.`;
+    if (o.ganada) ui.numeroOleada += 1;
+  }
   if (ui.sesion) {
     const bonus = completarSesion(estado, new Date());
-    mensaje += bonus > 0 ? ` Sesión de hoy completa: bonus de +${bonus} tinta.` : " Sesión completa.";
+    mensaje += bonus > 0 ? ` Primera del día: bonus de +${bonus} tinta.` : " El bonus del día ya lo tenías.";
     ui.sesion = false;
   }
   ui.modo = MODO.LIBRE;
@@ -447,6 +468,18 @@ function terminarOleada() {
   pintarPista();
   pintarHud();
   toast(mensaje);
+}
+
+function insignia(ctx, t, r) {
+  const c = { x: r * 0.85, y: r * 0.75 };
+  punto(ctx, c, 6.5, COLOR.PAPEL);
+  ctx.strokeStyle = COLOR.ACENTO;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  if (t === TECNICA.LINEA) { ctx.moveTo(c.x - 3.5, c.y + 3); ctx.lineTo(c.x + 3.5, c.y - 3); }
+  else if (t === TECNICA.ELIPSE) ctx.ellipse(c.x, c.y, 4, 2.6, 0, 0, Math.PI * 2);
+  else { ctx.moveTo(c.x - 4, c.y + 3); ctx.lineTo(c.x, c.y - 3); ctx.lineTo(c.x + 4, c.y + 3); }
+  ctx.stroke();
 }
 
 function pintarCampo(ahora) {
@@ -526,6 +559,7 @@ function pintarCampo(ahora) {
       ctx.fillRect(-r, -r - 8, r * 2, 3);
       ctx.fillStyle = COLOR.BIEN;
       ctx.fillRect(-r, -r - 8, r * 2 * Math.max(0, m.vida / m.vidaMax), 3);
+      if (m.tecnica) insignia(ctx, m.tecnica, r);
       ctx.restore();
     }
   }
@@ -551,7 +585,7 @@ function pintarCampo(ahora) {
     ctx.fillStyle = "rgba(31,29,43,0.55)";
     ctx.font = "13px -apple-system, system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("Sin oleada: pulsa Oleada o Sesión de hoy", w / 2, alto - 10);
+    ctx.fillText("Sin oleada: pulsa Oleada del día", w / 2, alto - 10);
     ctx.textAlign = "start";
   }
 }
@@ -565,7 +599,11 @@ function bucle(ahora) {
   if (corre) {
     actualizarOleada(ui.oleada, dt);
     if (ui.oleada.terminada) terminarOleada();
-    else if (ahora - ultimoHud > 250) { ultimoHud = ahora; pintarHud(); }
+    else if (ahora - ultimoHud > 250) {
+      ultimoHud = ahora;
+      pintarHud();
+      if (!ui.trazo && !ui.feedback && ahora >= ui.bloqueoHasta && tecnicaPedida() && tecnicaPedida() !== ui.tecnica) nuevoEjercicio();
+    }
   }
   if (ui.pantalla === PANTALLA.JUGAR) pintarCampo(ahora);
   requestAnimationFrame(bucle);
@@ -751,10 +789,10 @@ function pintarProgreso() {
   });
   raiz.replaceChildren(
     h("div", { class: "card" },
-      h("h2", { text: "Sesión de hoy" }),
-      h("p", { text: hoyHecho ? "Hecha. Puedes seguir practicando cuando quieras." : `Unos ${SESION.MINUTOS} minutos: ${SESION.CALENTAMIENTO_TRAZOS} trazos de calentamiento con tu técnica más débil (${TORRE[tecnicaMasDebil(estado)].corto.toLowerCase()}) y una oleada. La primera del día da +${SESION.BONUS_TINTA} tinta.` }),
-      h("p", { class: "tenue", text: `Días con sesión: ${estado.contadores.diasPractica} en total. No hay rachas: si faltas, no pierdes nada.` }),
-      h("button", { class: "btn primary ancho", type: "button", disabled: ui.modo !== MODO.LIBRE, onclick: () => { cambiarPantalla(PANTALLA.JUGAR); iniciarSesion(); }, text: hoyHecho ? "Practicar otra vez" : "Empezar sesión" })),
+      h("h2", { text: "Oleada del día" }),
+      h("p", { text: hoyHecho ? "Hecha. Puedes jugar otra oleada del día cuando quieras; el bonus es uno por día." : `Una oleada de unos ${SESION.MINUTOS} minutos. La mayoría de monstruos piden tu técnica más débil (${TORRE[tecnicaMasDebil(estado)].corto.toLowerCase()}). Al terminarla, la primera del día da +${SESION.BONUS_TINTA} tinta.` }),
+      h("p", { class: "tenue", text: `Días con oleada del día: ${estado.contadores.diasPractica} en total. No hay rachas: si faltas, no pierdes nada.` }),
+      h("button", { class: "btn primary ancho", type: "button", disabled: ui.modo !== MODO.LIBRE, onclick: () => { cambiarPantalla(PANTALLA.JUGAR); iniciarSesion(); }, text: hoyHecho ? "Otra oleada del día" : "Empezar oleada del día" })),
     h("div", { class: "card" },
       h("h2", { text: "Capítulo 1 · Drawabox" }),
       h("p", { class: "tenue", text: "Líneas, elipses y cajas. Cumple los mínimos para enfrentar al jefe." }),
@@ -800,7 +838,7 @@ function pintarAjustes() {
   raiz.replaceChildren(
     h("div", { class: "card" },
       h("h2", { text: "Tutorial" }),
-      h("p", { class: "tenue", text: "Repasa cómo se ataca dibujando, cómo se mide cada trazo, el jefe y la sesión diaria." }),
+      h("p", { class: "tenue", text: "Repasa cómo se ataca dibujando, cómo se mide cada trazo, el jefe y la oleada del día." }),
       h("button", { class: "btn primary ancho", type: "button", id: "repetir-tutorial", onclick: () => { cambiarPantalla(PANTALLA.JUGAR); abrirTutorial(); }, text: "Repetir tutorial" })),
     h("div", { class: "card" },
       h("h2", { text: "Progreso" }),

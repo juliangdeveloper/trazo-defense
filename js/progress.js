@@ -7,7 +7,7 @@ export const STATS = Object.freeze({
   oleadas_ganadas: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "oleadas ganadas" },
   monstruos_vencidos: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "monstruos vencidos" },
   jefes_vencidos: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "victorias contra jefes" },
-  dias_practica: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "días con sesión diaria completa, no seguidos" },
+  dias_practica: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "días con oleada del día completa, no seguidos" },
   mejor_puntaje_linea_pct: { tipo: TIPO_STAT.MEJOR_MARCA, unidad: "mejor puntaje de una línea, en porcentaje" },
   nivel_linea: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de líneas, 1 a 5" },
   nivel_elipse: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de elipses, 1 a 5" },

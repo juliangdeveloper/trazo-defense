@@ -12,7 +12,7 @@
 - **Perspectiva:** traza hacia el punto de fuga. Se mide el desvío en grados.
 - Mejor trazo, más daño. Cada resultado muestra sus métricas.
 - **Jefe:** con los mínimos del capítulo 1 cumplidos, dibuja horizonte, cara frontal y líneas de fuga para romper sus 4 puntos débiles.
-- **Sesión de 5 minutos:** calentamiento en tu técnica más débil y una oleada. La primera del día da tinta extra; no hay rachas ni se pierde nada.
+- **Oleada del día:** unos 5 minutos de monstruos, la mayoría débiles a tu técnica más débil; la torre la elige el monstruo que va primero. La primera del día da tinta extra; no hay rachas ni se pierde nada.
 - El tutorial se puede repetir desde Ajustes.
 
 ## Stack
