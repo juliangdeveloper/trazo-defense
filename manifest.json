@@ -1,0 +1,18 @@
+{
+  "name": "Trazo Defense",
+  "short_name": "Trazo",
+  "description": "Tower defense para aprender a dibujar: cada torre se activa con un ejercicio de dibujo medido.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f3ec",
+  "theme_color": "#f6f3ec",
+  "lang": "es-CO",
+  "version": "0.1.0",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "assets/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

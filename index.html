@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f3ec">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Tower defense para aprender a dibujar: cada torre se activa con un ejercicio de dibujo medido.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Trazo">
+  <meta property="og:title" content="Trazo Defense">
+  <meta property="og:description" content="Tower defense para aprender a dibujar: cada torre se activa con un ejercicio de dibujo medido.">
+  <meta property="og:image" content="assets/icon.svg">
+  <title>Trazo Defense</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icon-180.png">
+  <link rel="manifest" href="manifest.json?v=0.1.0">
+  <link rel="stylesheet" href="css/styles.css?v=0.1.0">
+</head>
+<body>
+  <header class="bar">
+    <p class="bar-title">Trazo Defense</p>
+    <div class="bar-end">
+      <span class="tinta" id="tinta" aria-label="Tinta">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3 4.5 6 7.6 6 11a6 6 0 0 1-12 0c0-3.4 3-6.5 6-11z" fill="currentColor"/></svg>
+        <span id="tinta-valor">0</span>
+      </span>
+      <span class="bar-version" id="bar-version"></span>
+    </div>
+  </header>
+
+  <main class="view" id="view">
+    <section class="screen" id="screen-jugar" data-screen="jugar">
+      <div class="hud">
+        <p class="hud-estado" id="hud-estado" aria-live="polite">Práctica libre</p>
+        <div class="hud-acciones">
+          <button class="chip-btn" type="button" id="btn-sesion">Sesión de hoy</button>
+          <button class="chip-btn" type="button" id="btn-oleada">Oleada</button>
+          <button class="chip-btn jefe-btn" type="button" id="btn-jefe" aria-label="Jefe">Jefe</button>
+        </div>
+      </div>
+      <div class="campo-wrap" id="campo-wrap"><canvas id="campo" aria-label="Campo de batalla"></canvas></div>
+      <div class="torres" id="torres" role="tablist" aria-label="Torres"></div>
+      <div class="pad-wrap" id="pad-wrap">
+        <canvas id="pad" aria-label="Lienzo de dibujo"></canvas>
+        <p class="pad-hint" id="pad-hint"></p>
+      </div>
+      <div class="lectura" id="lectura" aria-live="polite"></div>
+    </section>
+
+    <section class="screen scroll" id="screen-progreso" data-screen="progreso" hidden></section>
+    <section class="screen scroll" id="screen-proyecto" data-screen="proyecto" hidden></section>
+    <section class="screen scroll" id="screen-ajustes" data-screen="ajustes" hidden></section>
+  </main>
+
+  <nav class="tabbar" aria-label="Secciones">
+    <button type="button" data-tab="jugar" class="activo">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20c3-1 5-4 7-8s4-7 9-8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="20" cy="4" r="1.6" fill="currentColor"/></svg>
+      <span>Jugar</span>
+    </button>
+    <button type="button" data-tab="progreso">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M6 16l4-5 3 3 5-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Progreso</span>
+    </button>
+    <button type="button" data-tab="proyecto">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16M5 5h11l-2 3.5 2 3.5H5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Fase</span>
+    </button>
+    <button type="button" data-tab="ajustes">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M5.5 18.5l1.8-1.8M16.7 7.3l1.8-1.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span>Ajustes</span>
+    </button>
+  </nav>
+
+  <div class="jefe" id="jefe" hidden role="dialog" aria-modal="true" aria-labelledby="jefe-titulo">
+    <div class="jefe-cabeza">
+      <div class="jefe-retrato" id="jefe-retrato" aria-hidden="true"></div>
+      <div class="jefe-info">
+        <h2 id="jefe-titulo"></h2>
+        <p class="jefe-leccion" id="jefe-leccion"></p>
+      </div>
+      <button class="icon-btn" type="button" id="jefe-salir" aria-label="Salir">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <ul class="puntos-debiles" id="puntos-debiles"></ul>
+    <p class="jefe-paso" id="jefe-paso" aria-live="polite"></p>
+    <div class="pad-wrap jefe-pad" id="jefe-wrap"><canvas id="jefe-pad" aria-label="Lienzo del jefe"></canvas></div>
+    <div class="jefe-acciones">
+      <button class="btn" type="button" id="jefe-deshacer">Deshacer</button>
+      <button class="btn" type="button" id="jefe-borrar">Borrar</button>
+      <button class="btn primary" type="button" id="jefe-atacar" disabled>Atacar</button>
+    </div>
+    <div class="jefe-resultado" id="jefe-resultado" hidden></div>
+  </div>
+
+  <div class="tuto" id="tuto" hidden>
+    <div class="tuto-velo" id="tuto-velo"></div>
+    <div class="tuto-card" id="tuto-card" role="dialog" aria-modal="false" aria-labelledby="tuto-titulo">
+      <p class="tuto-paso" id="tuto-paso"></p>
+      <h2 id="tuto-titulo"></h2>
+      <p id="tuto-texto"></p>
+      <div class="tuto-acciones">
+        <button class="btn" type="button" id="tuto-saltar">Saltar</button>
+        <button class="btn primary" type="button" id="tuto-siguiente">Siguiente</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
+  <script type="module" src="js/app.js?v=0.1.0"></script>
+</body>
+</html>
