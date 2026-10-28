@@ -9,6 +9,7 @@ const FUGA_ANCHO = Object.freeze([0.3, 0.7]);
 const PERSPECTIVA_GUIA = 0.6;
 const PERSPECTIVA_DISTANCIA_MIN = 0.5;
 const JEFE_FUGA = Object.freeze([0.5, 0.34]);
+const RESERVA_MAX = 0.4;
 
 function entre(rng, [lo, hi]) {
   return lo + (hi - lo) * rng();
@@ -49,10 +50,25 @@ export function ejercicioPerspectiva(w, h, rng = Math.random) {
   return { tecnica: TECNICA.PERSPECTIVA, fuga, origen, largoGuia };
 }
 
-export function crearEjercicio(tecnica, w, h, rng = Math.random) {
-  if (tecnica === TECNICA.ELIPSE) return ejercicioElipse(w, h, rng);
-  if (tecnica === TECNICA.PERSPECTIVA) return ejercicioPerspectiva(w, h, rng);
-  return ejercicioLinea(w, h, rng);
+function bajar(p, dy) {
+  return { ...p, y: p.y + dy };
+}
+
+export function desplazarEjercicio(ej, dy) {
+  if (!dy) return ej;
+  if (ej.tecnica === TECNICA.ELIPSE) return { ...ej, caja: bajar(ej.caja, dy) };
+  if (ej.tecnica === TECNICA.PERSPECTIVA) return { ...ej, fuga: bajar(ej.fuga, dy), origen: bajar(ej.origen, dy) };
+  return { ...ej, a: bajar(ej.a, dy), b: bajar(ej.b, dy) };
+}
+
+export function crearEjercicio(tecnica, w, h, rng = Math.random, arriba = 0) {
+  const reserva = Math.max(0, Math.min(arriba, h * RESERVA_MAX));
+  const alto = h - reserva;
+  let ej;
+  if (tecnica === TECNICA.ELIPSE) ej = ejercicioElipse(w, alto, rng);
+  else if (tecnica === TECNICA.PERSPECTIVA) ej = ejercicioPerspectiva(w, alto, rng);
+  else ej = ejercicioLinea(w, alto, rng);
+  return desplazarEjercicio(ej, reserva);
 }
 
 export function escenaJefe(w, h) {

@@ -24,6 +24,7 @@ const COLOR = Object.freeze({
   PAPEL: "#fffdf8",
 });
 const FEEDBACK_MS = 650;
+const MARGEN_PISTA = 10;
 const PROYECTIL_MS = 420;
 const TEXTO_FLOTANTE_MS = 900;
 const TOAST_MS = 3200;
@@ -138,10 +139,12 @@ function seguirMonstruo() {
 
 function nuevoEjercicio() {
   seguirMonstruo();
-  ui.ejercicio = crearEjercicio(ui.tecnica, tamPad.w, tamPad.h);
+  pintarPista();
+  const pista = $("#pad-hint");
+  const arriba = pista.offsetTop + pista.offsetHeight + MARGEN_PISTA;
+  ui.ejercicio = crearEjercicio(ui.tecnica, tamPad.w, tamPad.h, Math.random, arriba);
   pad.dataset.ejercicio = JSON.stringify(ui.ejercicio);
   pintarPad();
-  pintarPista();
 }
 
 function pintarPista() {
@@ -208,7 +211,11 @@ function pintarEjercicio(ctx, ej, mostrarIdeal) {
     ctx.stroke();
     ctx.fillStyle = COLOR.TENUE;
     ctx.font = "11px -apple-system, system-ui, sans-serif";
-    ctx.fillText("horizonte", 8, ej.fuga.y - 6);
+    ctx.textAlign = "right";
+    ctx.textBaseline = "top";
+    ctx.fillText("horizonte", tamPad.w - 8, ej.fuga.y + 5);
+    ctx.textAlign = "start";
+    ctx.textBaseline = "alphabetic";
     if (mostrarIdeal) {
       ctx.setLineDash([6, 6]);
       trazar(ctx, [ej.origen, ej.fuga], COLOR.GUIA, 2);
@@ -508,7 +515,7 @@ function pintarCampo(ahora) {
   ctx.stroke();
   ctx.strokeStyle = COLOR.TENUE;
   for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(bx + 2, by - 10 + i * 7); ctx.lineTo(bx + 20, by - 10 + i * 7); ctx.stroke(); }
-  if (ui.oleada) {
+  if (ui.oleada && !ui.oleada.diaria) {
     ctx.fillStyle = COLOR.TINTA;
     ctx.font = "600 12px -apple-system, system-ui, sans-serif";
     ctx.textAlign = "center";
