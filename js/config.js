@@ -1,5 +1,5 @@
 export const APP_ID = "trazo-defense";
-export const APP_VERSION = "0.1.6";
+export const APP_VERSION = "0.1.7";
 export const SAVE_KEY = "trazo-defense.save";
 export const SAVE_VERSION = 1;
 export const CACHE_PREFIX = "trazo-defense-";
@@ -113,6 +113,19 @@ export const OLEADA = Object.freeze({
   CRECIMIENTO_VIDA: 0.12,
 });
 
+export const CAMARA_LENTA = Object.freeze({
+  FACTOR: 0.3,
+});
+
+export const ZONA_DIBUJO = Object.freeze({
+  ARRIBA: 0.25,
+  ABAJO: 0.79,
+});
+
+export const COLA = Object.freeze({
+  CANTIDAD: 3,
+});
+
 export const MONSTRUO = Object.freeze({
   BORRON: Object.freeze({ id: "borron", nombre: "Borrón", vida: 40, velocidad: 0.034, radio: 13, color: "#3b3a4a" }),
   GARABATO: Object.freeze({ id: "garabato", nombre: "Garabato", vida: 24, velocidad: 0.055, radio: 10, color: "#5b4bd6" }),
@@ -120,13 +133,13 @@ export const MONSTRUO = Object.freeze({
 });
 
 export const CAMINO = Object.freeze([
-  [-0.06, 0.22], [0.32, 0.22], [0.32, 0.78], [0.68, 0.78], [0.68, 0.3], [0.92, 0.3],
+  [0.14, -0.05], [0.14, 0.12], [0.86, 0.12], [0.86, 0.5], [0.5, 0.5], [0.5, 0.9],
 ]);
 
 export const POSICION_TORRE = Object.freeze({
-  [TECNICA.LINEA]: Object.freeze([0.16, 0.52]),
-  [TECNICA.ELIPSE]: Object.freeze([0.5, 0.5]),
-  [TECNICA.PERSPECTIVA]: Object.freeze([0.84, 0.66]),
+  [TECNICA.LINEA]: Object.freeze([0.13, 0.9]),
+  [TECNICA.ELIPSE]: Object.freeze([0.3, 0.9]),
+  [TECNICA.PERSPECTIVA]: Object.freeze([0.7, 0.9]),
 });
 
 export const PANTALLA = Object.freeze({
@@ -155,8 +168,10 @@ export const FASE_PUNTOS = Object.freeze([
   Object.freeze({ texto: "Bonus de tinta en la primera oleada de cada día, sin rachas", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Las 3 torres desde el inicio y oleadas que mezclan técnicas", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Mejoras de torre con tinta: más daño o más objetivos, sin quitarle peso al trazo", estado: PUNTO_FASE.HECHO }),
+  Object.freeze({ texto: "Campo vertical: los monstruos bajan hacia tu cuaderno y dibujas sobre el campo, entre ellos y la base", estado: PUNTO_FASE.HECHO }),
+  Object.freeze({ texto: "Cámara lenta mientras dibujas y cola con los próximos ejercicios", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Tutorial inicial que se puede repetir", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Funciona sin conexión y en iPhone 13 mini", estado: PUNTO_FASE.HECHO }),
+  Object.freeze({ texto: "Funciona sin conexión, en iPhone 13 mini y en iPad mini", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Calibrar umbrales con trazos reales", estado: PUNTO_FASE.PENDIENTE }),
   Object.freeze({ texto: "Capítulos 2 en adelante: cajas rotadas, texturas y formas orgánicas", estado: PUNTO_FASE.PENDIENTE }),
   Object.freeze({ texto: "Torre de gesto con poses de 30 segundos", estado: PUNTO_FASE.PENDIENTE }),

@@ -1,5 +1,5 @@
 const PREFIX = "trazo-defense-";
-const CACHE = PREFIX + "v0.1.6";
+const CACHE = PREFIX + "v0.1.7";
 const ASSETS = [
   "./",
   "./index.html",

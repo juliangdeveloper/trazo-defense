@@ -16,8 +16,8 @@
   <title>Trazo Defense</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
-  <link rel="manifest" href="manifest.json?v=0.1.6">
-  <link rel="stylesheet" href="css/styles.css?v=0.1.6">
+  <link rel="manifest" href="manifest.json?v=0.1.7">
+  <link rel="stylesheet" href="css/styles.css?v=0.1.7">
 </head>
 <body>
   <header class="bar">
@@ -37,16 +37,20 @@
         <p class="hud-estado" id="hud-estado" aria-live="polite">Práctica libre</p>
         <div class="hud-acciones">
           <button class="chip-btn" type="button" id="btn-oleada">Oleada</button>
-          <button class="chip-btn" type="button" id="btn-mejoras">Mejoras</button>
           <button class="chip-btn jefe-btn" type="button" id="btn-jefe" aria-label="Jefe">Jefe</button>
         </div>
       </div>
-      <div class="campo-wrap" id="campo-wrap"><canvas id="campo" aria-label="Campo de batalla"></canvas></div>
-      <div class="torres" id="torres" role="tablist" aria-label="Torres"></div>
-      <div class="pad-wrap" id="pad-wrap">
-        <canvas id="pad" aria-label="Lienzo de dibujo"></canvas>
-        <p class="pad-hint" id="pad-hint"></p>
+      <div class="campo-wrap" id="campo-wrap">
+        <canvas id="campo" aria-label="Campo de batalla"></canvas>
+        <div class="zona-dibujo" id="pad-wrap">
+          <canvas id="pad" aria-label="Zona de dibujo sobre el campo"></canvas>
+          <div class="zona-cabeza" id="zona-cabeza">
+            <p class="pad-hint" id="pad-hint"></p>
+            <div class="cola" id="cola" aria-label="Próximos ejercicios"></div>
+          </div>
+        </div>
       </div>
+      <div class="torres" id="torres" role="tablist" aria-label="Torres y mejoras"></div>
       <div class="lectura" id="lectura" aria-live="polite"></div>
     </section>
 
@@ -96,18 +100,6 @@
     <div class="jefe-resultado" id="jefe-resultado" hidden></div>
   </div>
 
-  <div class="mejoras" id="mejoras" hidden role="dialog" aria-modal="true" aria-labelledby="mejoras-titulo">
-    <div class="mejoras-cabeza">
-      <h2 id="mejoras-titulo">Mejoras de torre</h2>
-      <button class="icon-btn" type="button" id="mejoras-salir" aria-label="Cerrar">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-      </button>
-    </div>
-    <p class="mejoras-nota">Daño por objetivo = daño base × puntaje del trazo × mejora. Un mal trazo sigue haciendo poco.</p>
-    <p class="mejoras-tinta" id="mejoras-tinta"></p>
-    <div class="mejoras-lista" id="mejoras-lista"></div>
-  </div>
-
   <div class="tuto" id="tuto" hidden>
     <div class="tuto-velo" id="tuto-velo"></div>
     <div class="tuto-card" id="tuto-card" role="dialog" aria-modal="false" aria-labelledby="tuto-titulo">
@@ -122,6 +114,6 @@
   </div>
 
   <p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
-  <script type="module" src="js/app.js?v=0.1.6"></script>
+  <script type="module" src="js/app.js?v=0.1.7"></script>
 </body>
 </html>

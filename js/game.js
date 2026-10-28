@@ -123,6 +123,15 @@ export function danoDeTrazo(tecnica, puntaje, mejora = 0) {
   return Math.round(torre.danoBase * puntaje * efectoMejora(mejora).multiplicador);
 }
 
+export function ordenDelFrente(oleada) {
+  const vivos = [...oleada.vivos].sort((a, b) => b.avance - a.avance).map((m) => m.tecnica);
+  return [...vivos, ...oleada.cola.map((e) => e.tecnica)];
+}
+
+export function proximasTecnicas(oleada, cantidad) {
+  return ordenDelFrente(oleada).slice(1, 1 + Math.max(0, cantidad));
+}
+
 export function objetivosDelFrente(oleada, cantidad = 1) {
   return [...oleada.vivos].sort((a, b) => b.avance - a.avance).slice(0, Math.max(1, cantidad));
 }

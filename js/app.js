@@ -1,6 +1,6 @@
 import {
   APP_ID, APP_VERSION, SAVE_KEY, TECNICA, TECNICAS, TORRE, METRICA_PRINCIPAL, POSICION_TORRE, CAMINO,
-  JEFE, COMPARA, PANTALLA, MODO, FASE_PUNTOS, PUNTO_FASE, FASES_NOMBRE, ESTADOS_NOMBRE, TIPOS_NOMBRE, TOTAL_FASES, OLEADA, MEJORA,
+  JEFE, COMPARA, PANTALLA, MODO, FASE_PUNTOS, PUNTO_FASE, FASES_NOMBRE, ESTADOS_NOMBRE, TIPOS_NOMBRE, TOTAL_FASES, OLEADA, MEJORA, CAMARA_LENTA, ZONA_DIBUJO, COLA,
 } from "./config.js";
 import { PROYECTO, FASE, metaProyecto, metaUpdate, metaRead, crearEscritor } from "./meta.js";
 import { evaluarLinea, evaluarElipse, evaluarPerspectiva, evaluarJefe, clasificarTrazosJefe, faltantesJefe, metaPuntoDebil, TIPO_TRAZO_JEFE } from "./geometry.js";
@@ -8,7 +8,7 @@ import {
   STATS, cargar, guardar, registrarTrazo, promedioMovil, nivelTecnica, nivelJugador, minimosCapitulo, jefeDesbloqueado,
   tecnicaMasDebil, costoMejora, puedeMejorar, mejorarTorre, completarSesion, registrarOleada, registrarJefe, curva, statsMeta, logrosDe,
 } from "./progress.js";
-import { crearOleada, actualizarOleada, objetivoPrincipal, elegirObjetivo, puntoEnCamino, danoDeTrazo, atacar, tipoMonstruo, efectoMejora } from "./game.js";
+import { crearOleada, actualizarOleada, objetivoPrincipal, elegirObjetivo, puntoEnCamino, danoDeTrazo, atacar, tipoMonstruo, efectoMejora, proximasTecnicas } from "./game.js";
 import { crearEjercicio, escenaJefe } from "./ejercicios.js";
 import { crearTutorial, ACCION_TUTORIAL } from "./tutorial.js";
 
@@ -34,7 +34,8 @@ const TOAST_MS = 3200;
 const DT_MAX_MS = 50;
 const CURVA_DIAS = 30;
 const RADIO_TORRE = 15;
-const CAMPO_BASE = Object.freeze({ W: 340, H: 190, ESCALA_MAX: 1.9 });
+const CAMPO_BASE = Object.freeze({ W: 350, H: 480, ESCALA_MAX: 1.8 });
+const AVISO_MEJORA_MS = 1600;
 
 function escalaCampo() {
   return Math.min(CAMPO_BASE.ESCALA_MAX, Math.max(1, Math.min(tamCampo.w / CAMPO_BASE.W, tamCampo.h / CAMPO_BASE.H)));
@@ -76,7 +77,7 @@ const ui = {
   numeroOleada: 1,
   proyectiles: [],
   textos: [],
-  mejorasAbiertas: false,
+  avisoMejora: null,
   objetivoBloqueado: null,
   redimPendiente: false,
   marca: null,
@@ -123,6 +124,10 @@ function ajustarCanvas(canvas) {
 }
 
 const campo = $("#campo");
+const campoWrap = $("#campo-wrap");
+const zonaDibujo = $("#pad-wrap");
+zonaDibujo.style.top = `${ZONA_DIBUJO.ARRIBA * 100}%`;
+zonaDibujo.style.height = `${(ZONA_DIBUJO.ABAJO - ZONA_DIBUJO.ARRIBA) * 100}%`;
 const pad = $("#pad");
 const jefePad = $("#jefe-pad");
 let tamCampo = ajustarCanvas(campo);
@@ -131,6 +136,7 @@ let tamJefe = { ctx: jefePad.getContext("2d"), w: 1, h: 1 };
 
 function pintarTinta() {
   $("#tinta-valor").textContent = String(Math.round(estado.tinta));
+  for (const b of document.querySelectorAll("[data-mejorar]")) b.disabled = !puedeMejorar(estado, b.dataset.mejorar);
 }
 
 function tecnicaPedida() {
@@ -151,8 +157,9 @@ function nuevoEjercicio() {
   if (ui.trazo) return;
   seguirMonstruo();
   pintarPista();
-  const pista = $("#pad-hint");
-  const arriba = pista.offsetTop + pista.offsetHeight + MARGEN_PISTA;
+  pintarCola();
+  const cabeza = $("#zona-cabeza");
+  const arriba = cabeza.offsetTop + cabeza.offsetHeight + MARGEN_PISTA;
   ui.ejercicio = crearEjercicio(ui.tecnica, tamPad.w, tamPad.h, Math.random, arriba);
   pad.dataset.ejercicio = JSON.stringify(ui.ejercicio);
   pintarPad();
@@ -161,13 +168,38 @@ function nuevoEjercicio() {
 function pintarPista() {
   const pista = $("#pad-hint");
   const textos = {
-    [TECNICA.LINEA]: "Traza una recta de un punto al otro, en un solo trazo seguro.",
-    [TECNICA.ELIPSE]: "Dibuja una elipse que toque los 4 lados de la caja y cierre sobre sí misma.",
-    [TECNICA.PERSPECTIVA]: "Desde el punto negro, traza una recta que vaya hacia el punto de fuga.",
+    [TECNICA.LINEA]: "Une los dos puntos en un solo trazo seguro.",
+    [TECNICA.ELIPSE]: "Elipse que toque los 4 lados de la caja y cierre.",
+    [TECNICA.PERSPECTIVA]: "Desde el punto negro, recta hacia el punto de fuga.",
   };
   let texto = textos[ui.tecnica];
-  if (ui.modo === MODO.LIBRE && !tutorial.activo()) texto += " Sin oleada: solo práctica medida.";
+  if (ui.modo === MODO.LIBRE && !tutorial.activo()) texto += " Sin oleada: práctica.";
   pista.textContent = texto;
+}
+
+const ICONO_TECNICA = Object.freeze({
+  [TECNICA.LINEA]: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18L19 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  [TECNICA.ELIPSE]: '<svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="8.5" ry="5.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>',
+  [TECNICA.PERSPECTIVA]: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18L12 6L20 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+});
+
+function colaActual() {
+  if (ui.modo === MODO.OLEADA && ui.oleada) return proximasTecnicas(ui.oleada, COLA.CANTIDAD);
+  return Array.from({ length: COLA.CANTIDAD }, () => ui.tecnica);
+}
+
+function pintarCola() {
+  const el = $("#cola");
+  const lista = colaActual();
+  const clave = lista.join(",");
+  if (el.dataset.cola === clave) return;
+  el.dataset.cola = clave;
+  el.replaceChildren(h("span", { class: "cola-tit", text: "Luego" }), ...lista.map((t) => {
+    const item = h("span", { class: "cola-item", "data-tecnica": t, title: TORRE[t].corto, "aria-label": TORRE[t].corto });
+    item.innerHTML = ICONO_TECNICA[t];
+    return item;
+  }));
+  el.setAttribute("aria-label", lista.length ? `Luego: ${lista.map((t) => TORRE[t].corto.toLowerCase()).join(", ")}` : "No vienen más ejercicios");
 }
 
 function punto(ctx, p, radio, color, lleno = true) {
@@ -241,7 +273,9 @@ function pintarEjercicio(ctx, ej, mostrarIdeal) {
 function pintarPad() {
   const { ctx, w, h: alto } = tamPad;
   ctx.clearRect(0, 0, w, alto);
-  ctx.fillStyle = "#e9e4d8";
+  ctx.fillStyle = "rgba(255,253,248,0.56)";
+  ctx.fillRect(0, 0, w, alto);
+  ctx.fillStyle = "rgba(31,29,43,0.12)";
   for (let x = 16; x < w; x += 24) for (let y = 16; y < alto; y += 24) ctx.fillRect(x, y, 1.2, 1.2);
   const fb = ui.feedback;
   if (fb) {
@@ -453,21 +487,55 @@ conectarLienzo(pad, {
 
 document.addEventListener("gesturestart", (e) => e.preventDefault());
 
+function textoEfecto(nivel) {
+  const e = MEJORA.EFECTOS[nivel - 1];
+  if (e.objetivos > 0) return `golpea ${efectoMejora(nivel).objetivos} objetivos`;
+  return `+${Math.round(e.dano * 100)}% daño`;
+}
+
 function pintarTorres() {
   const cont = $("#torres");
-  cont.replaceChildren();
-  for (const t of TECNICAS) {
+  const ahora = performance.now();
+  const aviso = ui.avisoMejora && ahora - ui.avisoMejora.inicio < AVISO_MEJORA_MS ? ui.avisoMejora : null;
+  cont.replaceChildren(...TECNICAS.map((t) => {
     const torre = TORRE[t];
-    const detalle = `Nv ${nivelTecnica(estado, t)} · Mejora ${estado.mejoras[t]}`;
-    cont.append(h("button", {
+    const mejora = estado.mejoras[t];
+    const costo = costoMejora(estado, t);
+    const puede = puedeMejorar(estado, t);
+    const maximo = costo === null;
+    const elegir = h("button", {
       type: "button",
       role: "tab",
       class: "torre-btn",
       "aria-selected": String(ui.tecnica === t),
       "data-tecnica": t,
       onclick: () => elegirTorre(t),
-    }, h("span", { text: torre.corto }), h("small", { text: detalle })));
-  }
+    }, h("span", { text: torre.corto }), h("small", { text: `Nv ${nivelTecnica(estado, t)} · M${mejora}` }));
+    const mejorar = h("button", {
+      type: "button",
+      class: "mejora-btn" + (maximo ? " maximo" : ""),
+      "data-mejorar": t,
+      disabled: !puede,
+      "aria-label": maximo ? `${torre.nombre}: mejora al máximo` : `Mejorar ${torre.corto.toLowerCase()} a M${mejora + 1} (${textoEfecto(mejora + 1)}) por ${costo} tinta`,
+      onclick: () => comprarMejora(t),
+    });
+    if (maximo) mejorar.append(h("span", { class: "mas", text: "Máx" }));
+    else mejorar.append(h("span", { class: "mas", text: "+" }), h("small", { text: String(costo) }));
+    const celda = h("div", { class: "torre", "data-torre": t }, elegir, mejorar);
+    if (aviso && aviso.tecnica === t) celda.append(h("span", { class: "torre-aviso", role: "status", text: aviso.texto }));
+    return celda;
+  }));
+}
+
+function comprarMejora(t) {
+  if (tutorial.activo() && tutorial.esperaTrazo()) return;
+  if (!mejorarTorre(estado, t)) return;
+  const nivel = estado.mejoras[t];
+  ui.avisoMejora = { tecnica: t, texto: `M${nivel}: ${textoEfecto(nivel)}`, inicio: performance.now() };
+  persistir();
+  pintarTorres();
+  clearTimeout(comprarMejora.timer);
+  comprarMejora.timer = setTimeout(() => { ui.avisoMejora = null; pintarTorres(); }, AVISO_MEJORA_MS);
 }
 
 function elegirTorre(t) {
@@ -500,6 +568,7 @@ function pintarHud() {
   jefe.classList.toggle("listo", abierto);
   jefe.disabled = ocupado;
   jefe.setAttribute("aria-label", abierto ? "Enfrentar al jefe" : "Jefe bloqueado");
+  for (const b of document.querySelectorAll("[data-mejorar]")) b.disabled = !puedeMejorar(estado, b.dataset.mejorar);
 }
 
 function iniciarOleada() {
@@ -557,8 +626,7 @@ function pintarCampo(ahora) {
     pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
     ctx.stroke();
   }
-  const [bxReal, by] = pts[pts.length - 1];
-  const bx = Math.min(bxReal, w - 30 * s);
+  const [bx, by] = pts[pts.length - 1];
   ctx.save();
   ctx.translate(bx, by);
   ctx.scale(s, s);
@@ -566,18 +634,21 @@ function pintarCampo(ahora) {
   ctx.strokeStyle = COLOR.TINTA;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  if (typeof ctx.roundRect === "function") ctx.roundRect(-4, -20, 30, 40, 4);
-  else ctx.rect(-4, -20, 30, 40);
+  if (typeof ctx.roundRect === "function") ctx.roundRect(-17, -12, 34, 26, 4);
+  else ctx.rect(-17, -12, 34, 26);
   ctx.fill();
   ctx.stroke();
   ctx.strokeStyle = COLOR.TENUE;
-  for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(2, -10 + i * 7); ctx.lineTo(20, -10 + i * 7); ctx.stroke(); }
+  for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(-11, -5 + i * 6); ctx.lineTo(11, -5 + i * 6); ctx.stroke(); }
   ctx.restore();
+  campo.dataset.base = JSON.stringify({ x: Math.round(bx), y: Math.round(by), h: alto });
   if (ui.oleada) {
     ctx.fillStyle = COLOR.TINTA;
-    ctx.font = `600 ${Math.round(12 * s)}px -apple-system, system-ui, sans-serif`;
-    ctx.textAlign = "center";
-    ctx.fillText(`♥ ${ui.oleada.vidas}`, Math.min(w - 18 * s, bx + 11 * s), Math.min(alto - 6, by + 36 * s));
+    ctx.font = `600 ${Math.round(13 * s)}px -apple-system, system-ui, sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`♥ ${ui.oleada.vidas}`, Math.min(w - 40 * s, bx + 62 * s + w * 0.14), by);
+    ctx.textBaseline = "alphabetic";
     ctx.textAlign = "start";
   }
   for (const t of TECNICAS) {
@@ -653,7 +724,7 @@ function pintarCampo(ahora) {
     ctx.fillStyle = "rgba(31,29,43,0.55)";
     ctx.font = `${Math.round(13 * s)}px -apple-system, system-ui, sans-serif`;
     ctx.textAlign = "center";
-    ctx.fillText("Sin oleada: pulsa Oleada", w / 2, alto - 10 * s);
+    ctx.fillText("Sin oleada: pulsa Oleada", w / 2, alto * ZONA_DIBUJO.ARRIBA * 0.62);
     ctx.textAlign = "start";
   }
 }
@@ -663,16 +734,22 @@ let ultimoHud = 0;
 function bucle(ahora) {
   const dt = Math.min(DT_MAX_MS, ahora - ultimoFrame);
   ultimoFrame = ahora;
-  const corre = ui.modo === MODO.OLEADA && ui.oleada && ui.pantalla === PANTALLA.JUGAR && !tutorial.activo() && !ui.jefe.abierto && !ui.mejorasAbiertas && document.visibilityState === "visible";
+  const corre = ui.modo === MODO.OLEADA && ui.oleada && ui.pantalla === PANTALLA.JUGAR && !tutorial.activo() && !ui.jefe.abierto && document.visibilityState === "visible";
   if (corre) {
-    actualizarOleada(ui.oleada, dt);
+    actualizarOleada(ui.oleada, ui.trazo ? dt * CAMARA_LENTA.FACTOR : dt);
     if (ui.oleada.terminada) terminarOleada();
     else if (ahora - ultimoHud > 250) {
       ultimoHud = ahora;
       pintarHud();
+      pintarCola();
       const pedida = tecnicaPedida();
       if (!ui.trazo && !ui.feedback && ahora >= ui.bloqueoHasta && pedida && pedida !== ui.tecnica) nuevoEjercicio();
     }
+  }
+  const lento = Boolean(corre && ui.trazo);
+  if (campoWrap.classList.contains("lento") !== lento) {
+    campoWrap.classList.toggle("lento", lento);
+    campoWrap.dataset.ritmo = lento ? String(CAMARA_LENTA.FACTOR) : "1";
   }
   if (ui.pantalla === PANTALLA.JUGAR) {
     pintarCampo(ahora);
@@ -736,53 +813,6 @@ function pintarJefe() {
   const clas = clasificarTrazosJefe(ui.jefe.trazos, fuga);
   ui.jefe.trazos.forEach((t, i) => trazar(ctx, t, COLOR_TRAZO_JEFE[clas[i].tipo], 2.5));
   if (ui.jefe.trazo) trazar(ctx, ui.jefe.trazo, COLOR.TINTA, 2.5);
-}
-
-function textoEfecto(nivel) {
-  const e = MEJORA.EFECTOS[nivel - 1];
-  if (e.objetivos > 0) return `Nv ${nivel}: golpea ${efectoMejora(nivel).objetivos} objetivos`;
-  return `Nv ${nivel}: +${Math.round(e.dano * 100)}% daño`;
-}
-
-function pintarMejoras() {
-  $("#mejoras-tinta").textContent = `Tienes ${Math.round(estado.tinta)} tinta.`;
-  const lista = $("#mejoras-lista");
-  lista.replaceChildren(...TECNICAS.map((t) => {
-    const nivel = estado.mejoras[t];
-    const ef = efectoMejora(nivel);
-    const costo = costoMejora(estado, t);
-    return h("div", { class: "mejora", "data-tecnica": t },
-      h("div", { class: "fila" }, h("h3", { text: TORRE[t].nombre }), h("span", { class: "nivel", text: `Mejora ${nivel}/${MEJORA.MAX}` })),
-      h("p", { class: "tenue", text: `Daño ×${ef.multiplicador.toFixed(2)} · ${ef.objetivos === 1 ? "1 objetivo" : `${ef.objetivos} objetivos`}` }),
-      h("ol", { class: "mejora-niveles" }, MEJORA.EFECTOS.map((_, i) => h("li", { class: i < nivel ? "hecho" : "", text: `${textoEfecto(i + 1)} · ${MEJORA.COSTOS[i]} tinta` }))),
-      h("button", {
-        class: "btn primary ancho", type: "button", disabled: !puedeMejorar(estado, t), "data-mejorar": t,
-        onclick: () => comprarMejora(t),
-        text: costo === null ? "Nivel máximo" : `Mejorar a Nv ${nivel + 1} · ${costo} tinta`,
-      }));
-  }));
-}
-
-function comprarMejora(t) {
-  if (!mejorarTorre(estado, t)) return;
-  persistir();
-  pintarTinta();
-  pintarTorres();
-  pintarMejoras();
-  toast(`${TORRE[t].nombre}: ${textoEfecto(estado.mejoras[t])}.`);
-}
-
-function abrirMejoras() {
-  if (tutorial.activo()) return;
-  ui.mejorasAbiertas = true;
-  pintarMejoras();
-  $("#mejoras").hidden = false;
-}
-
-function cerrarMejoras() {
-  ui.mejorasAbiertas = false;
-  $("#mejoras").hidden = true;
-  ultimoFrame = performance.now();
 }
 
 function abrirJefe() {
@@ -850,8 +880,6 @@ conectarLienzo(jefePad, {
 });
 
 $("#jefe-salir").addEventListener("click", cerrarJefe);
-$("#btn-mejoras").addEventListener("click", abrirMejoras);
-$("#mejoras-salir").addEventListener("click", cerrarMejoras);
 $("#jefe-deshacer").addEventListener("click", () => { if (ui.jefe.resultado) return; ui.jefe.trazos.pop(); pintarJefe(); pintarPasoJefe(); });
 $("#jefe-borrar").addEventListener("click", () => { if (ui.jefe.resultado) return; ui.jefe.trazos = []; pintarJefe(); pintarPasoJefe(); });
 $("#jefe-atacar").addEventListener("click", atacarJefe);
