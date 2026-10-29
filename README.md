@@ -2,7 +2,9 @@
 
 > Tower defense para aprender a dibujar: cada torre dispara con un ejercicio de dibujo medido de forma objetiva.
 
-**▶ [Jugar ahora](https://juliangdeveloper.github.io/trazo-defense/)**
+**[▶ Jugar ahora](https://juliangdeveloper.github.io/trazo-defense/)** · gratis, en el navegador, sin instalar
+
+<img src="docs/screenshot.png" alt="Partida de Trazo Defense con monstruos bajando y la caja del ejercicio de elipse" width="320">
 
 ## Cómo se juega
 
@@ -26,4 +28,8 @@ HTML, CSS y JavaScript con módulos ES, sin dependencias. Funciona sin conexión
 python3 -m http.server 8080
 ```
 
+---
+
 Más proyectos: https://juliangdeveloper.github.io/
+
+Hecho con ❤️ y ✏️
