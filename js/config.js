@@ -1,5 +1,5 @@
 export const APP_ID = "trazo-defense";
-export const APP_VERSION = "0.1.9";
+export const APP_VERSION = "0.1.10";
 export const SAVE_KEY = "trazo-defense.save";
 export const SAVE_VERSION = 1;
 export const CACHE_PREFIX = "trazo-defense-";
@@ -64,6 +64,7 @@ export const PUNTO_DEBIL = Object.freeze({
   FUGANTES: "fugantes",
   FRONTALES: "frontales",
   SEGURIDAD: "seguridad",
+  ELIPSE: "elipse",
 });
 
 export const COMPARA = Object.freeze({ MENOR_O_IGUAL: "<=", MAYOR_O_IGUAL: ">=" });
@@ -72,21 +73,51 @@ export const JEFE = Object.freeze({
   id: "guardian_fuga",
   nombre: "Guardián del Punto de Fuga",
   leccion: "Drawabox 1 · Cajas en perspectiva de un punto",
+  minimoHorizonte: 1,
   minimoFugantes: 4,
   minimoFrontales: 4,
+  minimoElipses: 1,
   rectitudSeguraPct: 4,
-  recompensaTinta: 60,
+  elipseRectitudMinPct: 12,
+  elipseBarridoMinDeg: 270,
+  vida: 300,
+  danoTrazo: 20,
+  danoPuntoDebil: 20,
+  toleranciaDeg: 8,
+  recompensaTinta: 30,
+  golpeMs: 220,
   puntosDebiles: Object.freeze([
-    Object.freeze({ id: PUNTO_DEBIL.HORIZONTE, nombre: "Horizonte", texto: "el horizonte se inclina", media: false, unidad: "°", base: 4, paso: -0.5, limite: 1.5, compara: COMPARA.MENOR_O_IGUAL }),
-    Object.freeze({ id: PUNTO_DEBIL.FUGANTES, nombre: "Líneas de fuga", texto: "tus líneas de fuga se desvían", media: true, unidad: "°", base: 6, paso: -0.75, limite: 3, compara: COMPARA.MENOR_O_IGUAL }),
-    Object.freeze({ id: PUNTO_DEBIL.FRONTALES, nombre: "Cara frontal", texto: "tus verticales y horizontales se inclinan", media: true, unidad: "°", base: 5, paso: -0.6, limite: 2, compara: COMPARA.MENOR_O_IGUAL }),
-    Object.freeze({ id: PUNTO_DEBIL.SEGURIDAD, nombre: "Seguridad", texto: "trazos seguros:", media: false, unidad: "%", base: 60, paso: 5, limite: 85, compara: COMPARA.MAYOR_O_IGUAL }),
+    Object.freeze({ id: PUNTO_DEBIL.HORIZONTE, nombre: "Horizonte", corto: "Horizonte", texto: "el horizonte se inclina", media: false, unidad: "°", base: 4, paso: -0.5, limite: 1.5, compara: COMPARA.MENOR_O_IGUAL }),
+    Object.freeze({ id: PUNTO_DEBIL.FUGANTES, nombre: "Líneas de fuga", corto: "Fuga", texto: "tus líneas de fuga se desvían", media: true, unidad: "°", base: 6, paso: -0.75, limite: 3, compara: COMPARA.MENOR_O_IGUAL }),
+    Object.freeze({ id: PUNTO_DEBIL.FRONTALES, nombre: "Cara frontal", corto: "Cara", texto: "tus verticales y horizontales se inclinan", media: true, unidad: "°", base: 5, paso: -0.6, limite: 2, compara: COMPARA.MENOR_O_IGUAL }),
+    Object.freeze({ id: PUNTO_DEBIL.SEGURIDAD, nombre: "Seguridad", corto: "Seguridad", texto: "trazos seguros:", media: false, unidad: "%", base: 60, paso: 5, limite: 85, compara: COMPARA.MAYOR_O_IGUAL }),
+    Object.freeze({ id: PUNTO_DEBIL.ELIPSE, nombre: "Elipse", corto: "Elipse", texto: "la elipse en la cara frontal puntúa", media: false, unidad: "%", base: 55, paso: 5, limite: 80, compara: COMPARA.MAYOR_O_IGUAL }),
   ]),
+});
+
+export const ESCENA_JEFE = Object.freeze({
+  FUGA: Object.freeze([0.66, 0.2]),
+  CENTRO: Object.freeze([0.3, 0.64]),
+  LADO: 0.36,
+  FONDO: 0.45,
+  RESERVA_MAX: 0.3,
+});
+
+export const DEMO_JEFE = Object.freeze({
+  TRAZO_MS: 420,
+  PAUSA_MS: 140,
+  FINAL_MS: 900,
+});
+
+export const BATALLA_JEFE = Object.freeze({
+  Y: 0.12,
+  RADIO: 26,
+  RONDA_MS: 1400,
 });
 
 export const MEJORA = Object.freeze({
   MAX: 5,
-  COSTOS: Object.freeze([30, 50, 80, 120, 180]),
+  TINTA_POR_NIVEL: 10,
   EFECTOS: Object.freeze([
     Object.freeze({ dano: 0.15, objetivos: 0 }),
     Object.freeze({ dano: 0, objetivos: 1 }),
@@ -157,13 +188,15 @@ export const FASE_PUNTOS = Object.freeze([
   Object.freeze({ texto: "Torre de línea medida: desviación, extremos, seguridad y repasos", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Torre de elipse medida: ajuste, cierre, temblor y cobertura", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Torre de perspectiva: cierras un cubo con 3 líneas hacia el punto de fuga, medidas en grados", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Jefe con 4 puntos débiles y metas que suben con tu nivel", estado: PUNTO_FASE.HECHO }),
+  Object.freeze({ texto: "Jefe al final de la oleada, en el mismo campo, con barra de vida y 5 puntos débiles cuyas metas suben con tu nivel", estado: PUNTO_FASE.HECHO }),
+  Object.freeze({ texto: "Demo animada del jefe con trazo fantasma y botón Ver demo", estado: PUNTO_FASE.HECHO }),
+  Object.freeze({ texto: "Elipse inscrita en la cara frontal como punto débil del jefe", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Nivel por técnica desde promedios móviles, no por horas jugadas", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Curva de progreso por día y mínimos del capítulo 1", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Bonus de tinta en la primera oleada de cada día, sin rachas", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Las 3 torres desde el inicio y oleadas que mezclan técnicas", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Mejoras de torre con tinta: más daño o más objetivos, sin quitarle peso al trazo", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Las torres están en el campo: cada una muestra su mejora, se compra con su + y cambia de aspecto con el nivel", estado: PUNTO_FASE.HECHO }),
+  Object.freeze({ texto: "Mejoras de torre: más daño o más objetivos, sin quitarle peso al trazo", estado: PUNTO_FASE.HECHO }),
+  Object.freeze({ texto: "Cada 10 de tinta sube sola de nivel la torre más baja, y cambia de aspecto", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Campo vertical: los monstruos bajan hacia tu cuaderno y dibujas sobre el campo, entre ellos y la base", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Cámara lenta mientras dibujas y cola con los próximos ejercicios", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Tutorial inicial que se puede repetir", estado: PUNTO_FASE.HECHO }),

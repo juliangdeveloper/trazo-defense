@@ -1,4 +1,4 @@
-import { CAMINO, MONSTRUO, OLEADA, TORRE, PUNTAJE, MEJORA, MEZCLA, TECNICAS } from "./config.js";
+import { CAMINO, MONSTRUO, OLEADA, TORRE, PUNTAJE, MEJORA, MEZCLA, TECNICAS, JEFE } from "./config.js";
 
 export function largoCamino(camino = CAMINO) {
   let total = 0;
@@ -50,7 +50,7 @@ export function tecnicasOleada(cantidad, debil, numero = 1, peso = MEZCLA.PESO_D
   return lista;
 }
 
-export function crearOleada(numero, debil) {
+export function crearOleada(numero, debil, conJefe = false) {
   const tipos = composicionOleada(numero);
   const tecnicas = tecnicasOleada(tipos.length, debil, numero);
   return {
@@ -63,6 +63,9 @@ export function crearOleada(numero, debil) {
     vencidos: 0,
     llegaron: 0,
     tinta: 0,
+    abonada: 0,
+    conJefe: Boolean(conJefe),
+    jefe: null,
     terminada: false,
     ganada: false,
   };
@@ -96,11 +99,52 @@ export function actualizarOleada(oleada, dtMs) {
     oleada.terminada = true;
     oleada.ganada = false;
   } else if (!oleada.cola.length && !oleada.vivos.length) {
+    if (oleada.conJefe && !oleada.jefe) {
+      oleada.jefe = crearJefe(oleada.numero);
+      return oleada;
+    }
+    if (oleada.jefe && oleada.jefe.vida > 0) {
+      oleada.jefe.golpeMs = Math.max(0, oleada.jefe.golpeMs - dtMs);
+      return oleada;
+    }
     oleada.terminada = true;
     oleada.ganada = true;
     oleada.tinta += OLEADA.TINTA_POR_OLEADA;
   }
   return oleada;
+}
+
+export function crearJefe(numero) {
+  const vida = Math.round(JEFE.vida * multiplicadorVida(Math.max(1, Math.floor(numero))));
+  return { vida, vidaMax: vida, golpeMs: 0, rondas: 0 };
+}
+
+export function jefeActivo(oleada) {
+  return Boolean(oleada && oleada.jefe && oleada.jefe.vida > 0 && !oleada.terminada);
+}
+
+export function danoTrazoJefe(puntaje, mejora = 0) {
+  if (!Number.isFinite(puntaje) || puntaje < PUNTAJE.FALLO_BAJO) return 0;
+  return Math.round(JEFE.danoTrazo * puntaje * efectoMejora(mejora).multiplicador);
+}
+
+export function danoPuntosDebiles(rotos) {
+  return Math.max(0, Math.floor(rotos)) * JEFE.danoPuntoDebil;
+}
+
+export function golpearJefe(oleada, dano) {
+  const jefe = oleada && oleada.jefe;
+  if (!jefe || jefe.vida <= 0 || !(dano > 0)) return { dano: 0, vencido: false };
+  const real = Math.min(jefe.vida, Math.round(dano));
+  jefe.vida -= real;
+  jefe.golpeMs = JEFE.golpeMs;
+  return { dano: real, vencido: jefe.vida <= 0 };
+}
+
+export function cobrarTinta(oleada) {
+  const nueva = Math.max(0, oleada.tinta - oleada.abonada);
+  oleada.abonada = oleada.tinta;
+  return nueva;
 }
 
 export function objetivoPrincipal(oleada) {

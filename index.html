@@ -16,8 +16,8 @@
   <title>Trazo Defense</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
-  <link rel="manifest" href="manifest.json?v=0.1.9">
-  <link rel="stylesheet" href="css/styles.css?v=0.1.9">
+  <link rel="manifest" href="manifest.json?v=0.1.10">
+  <link rel="stylesheet" href="css/styles.css?v=0.1.10">
 </head>
 <body>
   <header class="bar">
@@ -37,7 +37,8 @@
         <p class="hud-estado" id="hud-estado" aria-live="polite">Práctica libre</p>
         <div class="hud-acciones">
           <button class="chip-btn" type="button" id="btn-oleada">Oleada</button>
-          <button class="chip-btn jefe-btn" type="button" id="btn-jefe" aria-label="Jefe">Jefe</button>
+          <button class="chip-btn" type="button" id="btn-borrar" hidden>Borrar</button>
+          <button class="chip-btn demo-btn" type="button" id="btn-demo" hidden>Ver demo</button>
         </div>
       </div>
       <div class="campo-wrap" id="campo-wrap">
@@ -78,28 +79,6 @@
     </button>
   </nav>
 
-  <div class="jefe" id="jefe" hidden role="dialog" aria-modal="true" aria-labelledby="jefe-titulo">
-    <div class="jefe-cabeza">
-      <div class="jefe-retrato" id="jefe-retrato" aria-hidden="true"></div>
-      <div class="jefe-info">
-        <h2 id="jefe-titulo"></h2>
-        <p class="jefe-leccion" id="jefe-leccion"></p>
-      </div>
-      <button class="icon-btn" type="button" id="jefe-salir" aria-label="Salir">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-      </button>
-    </div>
-    <ul class="puntos-debiles" id="puntos-debiles"></ul>
-    <p class="jefe-paso" id="jefe-paso" aria-live="polite"></p>
-    <div class="pad-wrap jefe-pad" id="jefe-wrap"><canvas id="jefe-pad" aria-label="Lienzo del jefe"></canvas></div>
-    <div class="jefe-acciones">
-      <button class="btn" type="button" id="jefe-deshacer">Deshacer</button>
-      <button class="btn" type="button" id="jefe-borrar">Borrar</button>
-      <button class="btn primary" type="button" id="jefe-atacar" disabled>Atacar</button>
-    </div>
-    <div class="jefe-resultado" id="jefe-resultado" hidden></div>
-  </div>
-
   <div class="tuto" id="tuto" hidden>
     <div class="tuto-velo" id="tuto-velo"></div>
     <div class="tuto-card" id="tuto-card" role="dialog" aria-modal="false" aria-labelledby="tuto-titulo">
@@ -114,6 +93,6 @@
   </div>
 
   <p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
-  <script type="module" src="js/app.js?v=0.1.9"></script>
+  <script type="module" src="js/app.js?v=0.1.10"></script>
 </body>
 </html>

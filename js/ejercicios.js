@@ -1,4 +1,4 @@
-import { TECNICA } from "./config.js";
+import { TECNICA, ESCENA_JEFE } from "./config.js";
 
 const MARGEN = 0.1;
 const LINEA_LARGO = Object.freeze([0.5, 0.78]);
@@ -12,7 +12,6 @@ const CUBO_SEPARACION = 0.12;
 const CUBO_BAJO_HORIZONTE = 0.2;
 const CUBO_ARISTA_MIN = 0.2;
 const CUBO_INTENTOS = 30;
-const JEFE_FUGA = Object.freeze([0.5, 0.34]);
 const RESERVA_MAX = 0.4;
 
 function entre(rng, [lo, hi]) {
@@ -107,6 +106,34 @@ export function crearEjercicio(tecnica, w, h, rng = Math.random, arriba = 0) {
   return desplazarEjercicio(ej, reserva);
 }
 
-export function escenaJefe(w, h) {
-  return { fuga: { x: JEFE_FUGA[0] * w, y: JEFE_FUGA[1] * h } };
+export function escenaJefe(w, h, arriba = 0) {
+  const reserva = Math.max(0, Math.min(arriba, h * ESCENA_JEFE.RESERVA_MAX));
+  const alto = h - reserva;
+  const fuga = { x: ESCENA_JEFE.FUGA[0] * w, y: reserva + ESCENA_JEFE.FUGA[1] * alto };
+  const centro = { x: ESCENA_JEFE.CENTRO[0] * w, y: reserva + ESCENA_JEFE.CENTRO[1] * alto };
+  const lado = ESCENA_JEFE.LADO * Math.min(w, alto);
+  return { fuga, centro, lado, w, h };
+}
+
+export function trazosDemoJefe(escena, muestras = 48) {
+  const { fuga, centro, lado, w } = escena;
+  const m = lado / 2;
+  const esquinas = [
+    { x: centro.x - m, y: centro.y - m },
+    { x: centro.x + m, y: centro.y - m },
+    { x: centro.x + m, y: centro.y + m },
+    { x: centro.x - m, y: centro.y + m },
+  ];
+  const borde = Math.min(12, w * 0.03);
+  const horizonte = { paso: "horizonte", puntos: [{ x: borde, y: fuga.y }, { x: w - borde, y: fuga.y }] };
+  const cara = esquinas.map((p, i) => ({ paso: "cara", puntos: [p, esquinas[(i + 1) % 4]] }));
+  const fugantes = esquinas.map((p) => ({ paso: "fuga", puntos: [p, hacia(p, fuga, ESCENA_JEFE.FONDO)] }));
+  const elipse = {
+    paso: "elipse",
+    puntos: Array.from({ length: muestras + 1 }, (_, i) => {
+      const a = -Math.PI / 2 + (i / muestras) * Math.PI * 2;
+      return { x: centro.x + Math.cos(a) * m, y: centro.y + Math.sin(a) * m };
+    }),
+  };
+  return [horizonte, ...cara, ...fugantes, elipse];
 }

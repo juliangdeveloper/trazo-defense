@@ -1,15 +1,16 @@
 import {
   APP_ID, APP_VERSION, SAVE_KEY, TECNICA, TECNICAS, TORRE, METRICA_PRINCIPAL, CAMINO, PUNTAJE,
   JEFE, COMPARA, PANTALLA, MODO, FASE_PUNTOS, PUNTO_FASE, FASES_NOMBRE, ESTADOS_NOMBRE, TIPOS_NOMBRE, TOTAL_FASES, OLEADA, MEJORA, CAMARA_LENTA, ZONA_DIBUJO, COLA,
+  DEMO_JEFE, BATALLA_JEFE,
 } from "./config.js";
 import { PROYECTO, FASE, metaProyecto, metaUpdate, metaRead, crearEscritor } from "./meta.js";
-import { evaluarLinea, evaluarElipse, evaluarFugante, asignarArista, resumenCubo, evaluarJefe, clasificarTrazosJefe, faltantesJefe, metaPuntoDebil, TIPO_TRAZO_JEFE } from "./geometry.js";
+import { evaluarLinea, evaluarElipse, evaluarFugante, asignarArista, resumenCubo, evaluarJefe, clasificarTrazosJefe, faltantesJefe, cuentaJefe, puntajeTrazoJefe, CUPO_JEFE, TIPO_TRAZO_JEFE } from "./geometry.js";
 import {
   STATS, cargar, guardar, registrarTrazo, promedioMovil, nivelTecnica, nivelJugador, minimosCapitulo, jefeDesbloqueado,
-  tecnicaMasDebil, costoMejora, puedeMejorar, mejorarTorre, completarSesion, registrarOleada, registrarJefe, curva, statsMeta, logrosDe,
+  tecnicaMasDebil, siguienteMejora, progresoTinta, subirConTinta, completarSesion, registrarOleada, registrarJefe, curva, statsMeta, logrosDe,
 } from "./progress.js";
-import { crearOleada, actualizarOleada, objetivoPrincipal, elegirObjetivo, puntoEnCamino, danoDeTrazo, atacar, tipoMonstruo, efectoMejora, proximasTecnicas } from "./game.js";
-import { crearEjercicio, escenaJefe, aristasCubo } from "./ejercicios.js";
+import { crearOleada, actualizarOleada, objetivoPrincipal, elegirObjetivo, puntoEnCamino, danoDeTrazo, atacar, tipoMonstruo, efectoMejora, proximasTecnicas, danoTrazoJefe, danoPuntosDebiles, golpearJefe, cobrarTinta } from "./game.js";
+import { crearEjercicio, escenaJefe, trazosDemoJefe, aristasCubo } from "./ejercicios.js";
 import { crearTutorial, ACCION_TUTORIAL } from "./tutorial.js";
 
 const COLOR = Object.freeze({
@@ -84,8 +85,14 @@ const ui = {
   objetivoBloqueado: null,
   redimPendiente: false,
   marca: null,
-  jefe: { abierto: false, trazos: [], trazo: null, nivel: 1, resultado: null },
+  avisos: {},
+  demo: null,
+  jefe: jefeVacio(),
 };
+
+function jefeVacio() {
+  return { activo: false, trazos: [], nivel: 1, escena: null, resultado: null, bloqueoHasta: 0, vencido: false, rondaTimer: 0 };
+}
 
 function toast(texto) {
   const el = $("#toast");
@@ -134,14 +141,31 @@ zonaDibujo.style.height = `${(ZONA_DIBUJO.ABAJO - ZONA_DIBUJO.ARRIBA) * 100}%`;
 const torresEl = $("#torres");
 torresEl.style.top = `${ZONA_DIBUJO.ABAJO * 100}%`;
 const pad = $("#pad");
-const jefePad = $("#jefe-pad");
 let tamCampo = ajustarCanvas(campo);
 let tamPad = ajustarCanvas(pad);
-let tamJefe = { ctx: jefePad.getContext("2d"), w: 1, h: 1 };
 
 function pintarTinta() {
   $("#tinta-valor").textContent = String(Math.round(estado.tinta));
-  refrescarCompra();
+  pintarTorres();
+}
+
+function aplicarSubidas() {
+  const subidas = subirConTinta(estado);
+  if (!subidas.length) return subidas;
+  const ultimas = {};
+  for (const s of subidas) ultimas[s.tecnica] = s.nivel;
+  const inicio = performance.now();
+  for (const [t, nivel] of Object.entries(ultimas)) ui.avisos[t] = { texto: `M${nivel}: ${textoEfecto(nivel)}`, inicio };
+  clearTimeout(aplicarSubidas.timer);
+  aplicarSubidas.timer = setTimeout(() => { ui.avisos = {}; pintarTorres(); }, AVISO_MEJORA_MS);
+  return subidas;
+}
+
+function abonarTinta(cantidad) {
+  if (!(cantidad > 0)) return;
+  estado.tinta += cantidad;
+  aplicarSubidas();
+  persistir();
 }
 
 function cuboEnCurso() {
@@ -164,6 +188,7 @@ function seguirMonstruo() {
 }
 
 function nuevoEjercicio(forzar = false) {
+  if (ui.jefe.activo) return;
   if (ui.trazo || (!forzar && cuboEnCurso())) return;
   seguirMonstruo();
   ui.ejercicio = null;
@@ -177,8 +202,26 @@ function nuevoEjercicio(forzar = false) {
   pintarPad();
 }
 
+function textoPasoJefe() {
+  const clas = clasificarTrazosJefe(ui.jefe.trazos, ui.jefe.escena.fuga);
+  const falta = faltantesJefe(clas);
+  const n = cuentaJefe(clas);
+  if (falta.horizonte) return "Jefe · 1. Horizonte: una recta horizontal por el punto de fuga rojo.";
+  if (falta.frontales) return `Jefe · 2. Cara frontal alrededor del punto azul: 2 horizontales y 2 verticales (${n.frontales}/${JEFE.minimoFrontales}).`;
+  if (falta.fugantes) return `Jefe · 3. De cada esquina, una recta hacia el punto de fuga (${n.fugantes}/${JEFE.minimoFugantes}).`;
+  if (falta.elipses) return "Jefe · 4. Elipse dentro de la cara frontal que toque sus 4 lados.";
+  return "Jefe · Caja completa: mira los puntos débiles.";
+}
+
+const PASO_DEMO = Object.freeze({ horizonte: "1. horizonte", cara: "2. cara frontal", fuga: "3. líneas de fuga", elipse: "4. elipse en la cara" });
+
 function pintarPista() {
   const pista = $("#pad-hint");
+  if (ui.jefe.activo) {
+    const demo = estadoDemo();
+    pista.textContent = demo && demo.trazo ? `Demo · ${PASO_DEMO[demo.trazo.paso]}` : textoPasoJefe();
+    return;
+  }
   const textos = {
     [TECNICA.LINEA]: "Une los dos puntos en un solo trazo seguro.",
     [TECNICA.ELIPSE]: "Elipse que toque los 4 lados de la caja y cierre.",
@@ -197,6 +240,7 @@ const ICONO_TECNICA = Object.freeze({
 });
 
 function colaActual() {
+  if (ui.jefe.activo) return [];
   if (ui.modo === MODO.OLEADA && ui.oleada) return proximasTecnicas(ui.oleada, COLA.CANTIDAD);
   return Array.from({ length: COLA.CANTIDAD }, () => ui.tecnica);
 }
@@ -205,6 +249,7 @@ function pintarCola() {
   const el = $("#cola");
   const lista = colaActual();
   const clave = lista.join(",");
+  el.hidden = ui.jefe.activo;
   if (el.dataset.cola === clave) return;
   el.dataset.cola = clave;
   el.replaceChildren(h("span", { class: "cola-tit", text: "Luego" }), ...lista.map((t) => {
@@ -317,7 +362,9 @@ function pintarPad() {
   ctx.fillStyle = "rgba(31,29,43,0.12)";
   for (let x = 16; x < w; x += 24) for (let y = 16; y < alto; y += 24) ctx.fillRect(x, y, 1.2, 1.2);
   const fb = ui.feedback;
-  if (fb) {
+  if (ui.jefe.activo) {
+    pintarEscenaJefe(ctx);
+  } else if (fb) {
     pintarEjercicio(ctx, fb.ejercicio, true);
     trazar(ctx, fb.trazo, fb.color, 3);
   } else {
@@ -366,6 +413,11 @@ function pintarMarca(ctx, w, alto) {
 }
 
 function zonasLibres(ctx, w) {
+  if (ui.jefe.activo && ui.jefe.escena) {
+    const { fuga, centro } = ui.jefe.escena;
+    const r = MARCA_EVITA_FUGA;
+    return [fuga, centro].map((p) => ({ x: p.x - r, y: p.y - r, w: r * 2, h: r * 2, peso: MARCA_PESO_FUGA }));
+  }
   const ej = ui.feedback ? ui.feedback.ejercicio : ui.ejercicio;
   if (!ej || ej.tecnica !== TECNICA.PERSPECTIVA) return [];
   ctx.font = ETIQUETA_HORIZONTE.FUENTE;
@@ -467,6 +519,7 @@ function golpear(tecnica, puntaje) {
     ui.textos.push({ x: destino.x, y: destino.y - 18 * escalaCampo(), texto: `−${dano}`, inicio: performance.now(), color: COLOR.TINTA });
     if (g.vencido) ui.textos.push({ x: destino.x, y: destino.y + 6 * escalaCampo(), texto: `+${OLEADA.TINTA_POR_MONSTRUO}`, inicio: performance.now(), color: COLOR.ACENTO });
   }
+  abonarTinta(cobrarTinta(ui.oleada));
   return { dano, golpes: golpe.golpes.length };
 }
 
@@ -521,6 +574,11 @@ function terminarTrazoCubo(ej, puntos) {
 function terminarTrazo(puntos) {
   const ej = ui.ejercicio;
   ui.trazo = null;
+  if (ui.jefe.activo) {
+    terminarTrazoJefe(puntos);
+    if (ui.redimPendiente) { ui.redimPendiente = false; redimensionar(); }
+    return;
+  }
   if (!ej) return;
   if (ej.tecnica === TECNICA.PERSPECTIVA) {
     terminarTrazoCubo(ej, puntos);
@@ -586,8 +644,12 @@ function conectarLienzo(canvas, { puede, empezar, mover, terminar }) {
 }
 
 conectarLienzo(pad, {
-  puede: () => performance.now() >= ui.bloqueoHasta && (!tutorial.activo() || tutorial.esperaTrazo()),
+  puede: () => {
+    if (ui.jefe.activo) return !ui.jefe.vencido && performance.now() >= ui.jefe.bloqueoHasta;
+    return performance.now() >= ui.bloqueoHasta && (!tutorial.activo() || tutorial.esperaTrazo());
+  },
   empezar(p) {
+    if (ui.demo) pararDemo();
     ui.feedback = null;
     ui.marca = null;
     if (!cuboEnCurso()) {
@@ -646,85 +708,60 @@ function spriteTorre(t, nivel, elegida) {
   return `<svg viewBox="0 0 48 48" aria-hidden="true">${halo}${torre}${icono}${pips}${corona}</svg>`;
 }
 
-function textoCompra(t) {
+function textoProgreso(t) {
   const torre = TORRE[t];
   const mejora = estado.mejoras[t];
-  const costo = costoMejora(estado, t);
-  if (costo === null) return `${torre.nombre}: mejora al máximo`;
-  return `Mejorar ${torre.corto.toLowerCase()} a M${mejora + 1} (${textoEfecto(mejora + 1)}) por ${costo} tinta`;
+  if (mejora >= MEJORA.MAX) return `${torre.nombre}: mejora al máximo`;
+  if (siguienteMejora(estado) === t) return `Sube a M${mejora + 1} (${textoEfecto(mejora + 1)}) con ${progresoTinta(estado)} de ${MEJORA.TINTA_POR_NIVEL} tinta`;
+  return `Sube a M${mejora + 1} cuando le toque, después de las torres de menor nivel`;
 }
 
-function refrescarCompra() {
-  for (const c of document.querySelectorAll(".torre[data-torre]")) {
-    const puede = puedeMejorar(estado, c.dataset.torre);
-    c.classList.toggle("sin-tinta", !puede);
-    const pill = c.querySelector(".mejora-btn");
-    if (pill) pill.classList.toggle("sin-tinta", !puede);
-  }
+function pastillaMejora(t) {
+  const mejora = estado.mejoras[t];
+  if (mejora >= MEJORA.MAX) return h("span", { class: "mejora-btn maximo", "aria-hidden": "true" }, h("span", { class: "mas", text: "Máx" }));
+  if (siguienteMejora(estado) !== t) return h("span", { class: "mejora-btn espera", "data-progreso": t, "aria-hidden": "true" }, h("small", { text: "luego" }));
+  const valor = progresoTinta(estado);
+  return h("span", { class: "mejora-btn progreso", "data-progreso": t, style: `--p:${Math.round((valor / MEJORA.TINTA_POR_NIVEL) * 100)}%`, "aria-hidden": "true" }, h("small", { text: `${valor}/${MEJORA.TINTA_POR_NIVEL}` }));
 }
 
-function pastillaMejora(t, costo, puede) {
-  const maximo = costo === null;
-  const pill = h("span", { class: "mejora-btn" + (maximo ? " maximo" : "") + (puede ? "" : " sin-tinta"), "data-mejorar": t, "aria-hidden": "true" });
-  if (maximo) pill.append(h("span", { class: "mas", text: "Máx" }));
-  else pill.append(h("span", { class: "mas", text: "+" }), h("small", { text: String(costo) }));
-  return pill;
-}
-
-function tocarTorre(t, e) {
-  if (ui.modo === MODO.OLEADA || e.target.closest(".mejora-btn")) comprarMejora(t);
-  else elegirTorre(t);
+function tocarTorre(t) {
+  elegirTorre(t);
 }
 
 function pintarTorres() {
   const ahora = performance.now();
-  const aviso = ui.avisoMejora && ahora - ui.avisoMejora.inicio < AVISO_MEJORA_MS ? ui.avisoMejora : null;
-  const oleada = ui.modo === MODO.OLEADA;
   const enfocada = torresEl.querySelector(".torre-btn.tuto-foco");
   const tecnicaEnfocada = enfocada ? enfocada.dataset.tecnica : null;
   torresEl.replaceChildren(...TECNICAS.map((t) => {
     const torre = TORRE[t];
     const mejora = estado.mejoras[t];
-    const costo = costoMejora(estado, t);
-    const puede = puedeMejorar(estado, t);
-    const elegida = ui.tecnica === t;
+    const elegida = ui.tecnica === t && !ui.jefe.activo;
     const marco = h("button", {
       type: "button",
       class: "torre-btn",
       "aria-pressed": String(elegida),
       "data-tecnica": t,
-      "aria-label": oleada ? `${torre.nombre}, M${mejora}. ${textoCompra(t)}` : `${torre.nombre}, M${mejora}. Practicar ${torre.corto.toLowerCase()}. ${textoCompra(t)} con el +`,
-      onclick: (e) => tocarTorre(t, e),
+      "aria-label": `${torre.nombre}, M${mejora}. ${textoProgreso(t)}`,
+      onclick: () => tocarTorre(t),
     });
     marco.innerHTML = spriteTorre(t, mejora, elegida);
     marco.prepend(h("span", { class: "torre-nivel", text: `M${mejora}` }));
-    marco.append(h("span", { class: "torre-nombre", text: torre.corto }), pastillaMejora(t, costo, puede));
+    marco.append(h("span", { class: "torre-nombre", text: torre.corto }), pastillaMejora(t));
     if (tecnicaEnfocada === t) marco.classList.add("tuto-foco");
-    const celda = h("div", { class: "torre" + (puede ? "" : " sin-tinta") + (costo === null ? " maximo" : ""), "data-torre": t, "data-nivel": String(mejora) }, marco);
-    if (aviso && aviso.tecnica === t) celda.append(h("span", { class: "torre-aviso" + (aviso.falla ? " falla" : ""), role: "status", text: aviso.texto }));
+    const siguiente = siguienteMejora(estado) === t;
+    const celda = h("div", { class: "torre" + (mejora >= MEJORA.MAX ? " maximo" : "") + (siguiente ? " siguiente" : ""), "data-torre": t, "data-nivel": String(mejora) }, marco);
+    const aviso = ui.avisos[t];
+    if (aviso && ahora - aviso.inicio < AVISO_MEJORA_MS) celda.append(h("span", { class: "torre-aviso", role: "status", text: aviso.texto }));
     return celda;
   }));
 }
 
-function avisar(t, texto, falla = false) {
-  ui.avisoMejora = { tecnica: t, texto, falla, inicio: performance.now() };
-  pintarTorres();
-  clearTimeout(avisar.timer);
-  avisar.timer = setTimeout(() => { ui.avisoMejora = null; pintarTorres(); }, AVISO_MEJORA_MS);
-}
-
-function comprarMejora(t) {
-  if (tutorial.activo() && tutorial.esperaTrazo()) return;
-  const costo = costoMejora(estado, t);
-  if (costo === null) { avisar(t, "Mejora al máximo", true); return; }
-  if (!mejorarTorre(estado, t)) { avisar(t, `Faltan ${Math.ceil(costo - estado.tinta)} de tinta`, true); return; }
-  const nivel = estado.mejoras[t];
-  persistir();
-  avisar(t, `M${nivel}: ${textoEfecto(nivel)}`);
-}
-
 function elegirTorre(t) {
   if (tutorial.activo() && tutorial.esperaTrazo()) return;
+  if (ui.jefe.activo) {
+    toast("Contra el jefe no eliges torre: dibuja la caja y cada trazo le hace daño.");
+    return;
+  }
   const pedida = tecnicaPedida();
   if (pedida && pedida !== t) {
     toast(`En la oleada elige el monstruo que va primero: ahora pide ${TORRE[pedida].corto.toLowerCase()}.`);
@@ -740,27 +777,27 @@ function elegirTorre(t) {
 function pintarHud() {
   const est = $("#hud-estado");
   const ola = $("#btn-oleada");
-  const jefe = $("#btn-jefe");
+  const demo = $("#btn-demo");
   if (ui.modo === MODO.OLEADA && ui.oleada) {
     const o = ui.oleada;
-    est.textContent = `Oleada ${o.numero} · ${o.vidas} vidas · quedan ${o.cola.length + o.vivos.length}`;
+    if (o.jefe && ui.jefe.activo) est.textContent = `Oleada ${o.numero} · Jefe ${Math.max(0, o.jefe.vida)}/${o.jefe.vidaMax}`;
+    else est.textContent = `Oleada ${o.numero} · ${o.vidas} vidas · quedan ${o.cola.length + o.vivos.length}`;
   } else {
     est.textContent = `Práctica libre · nivel ${nivelJugador(estado)}`;
   }
-  const ocupado = ui.modo !== MODO.LIBRE;
-  ola.disabled = ocupado;
-  const abierto = jefeDesbloqueado(estado);
-  jefe.classList.toggle("bloqueado", !abierto);
-  jefe.classList.toggle("listo", abierto);
-  jefe.disabled = ocupado;
-  jefe.setAttribute("aria-label", abierto ? "Enfrentar al jefe" : "Jefe bloqueado");
-  refrescarCompra();
+  ola.disabled = ui.modo !== MODO.LIBRE;
+  ola.hidden = ui.jefe.activo;
+  demo.hidden = !ui.jefe.activo;
+  demo.disabled = ui.jefe.vencido;
+  const borrar = $("#btn-borrar");
+  borrar.hidden = !ui.jefe.activo;
+  borrar.disabled = ui.jefe.vencido || !ui.jefe.trazos.length;
 }
 
 function iniciarOleada() {
   if (ui.modo === MODO.OLEADA) return;
   ui.modo = MODO.OLEADA;
-  ui.oleada = crearOleada(ui.numeroOleada, tecnicaMasDebil(estado));
+  ui.oleada = crearOleada(ui.numeroOleada, tecnicaMasDebil(estado), jefeDesbloqueado(estado));
   ui.proyectiles = [];
   ui.textos = [];
   if (!ui.trazo) { ui.feedback = null; nuevoEjercicio(true); }
@@ -769,17 +806,30 @@ function iniciarOleada() {
   pintarHud();
 }
 
+function faltanMinimos() {
+  return minimosCapitulo(estado).filter((m) => !m.cumple).map((m) => TORRE[m.tecnica].corto.toLowerCase());
+}
+
 function terminarOleada() {
   const o = ui.oleada;
-  registrarOleada(estado, { ganada: o.ganada, monstruos: o.vencidos, tinta: o.tinta });
-  let mensaje = o.ganada ? `Oleada ${o.numero} superada: +${o.tinta} tinta.` : `La oleada ${o.numero} llegó a tu cuaderno. No pierdes nada: vuelve a intentarlo.`;
+  const conJefe = Boolean(o.jefe);
+  registrarOleada(estado, { ganada: o.ganada, monstruos: o.vencidos, tinta: cobrarTinta(o) });
+  let mensaje;
+  if (o.ganada && conJefe) mensaje = `¡Jefe vencido! Oleada ${o.numero} superada: +${JEFE.recompensaTinta + OLEADA.TINTA_POR_OLEADA} tinta.`;
+  else if (o.ganada) mensaje = `Oleada ${o.numero} superada: +${OLEADA.TINTA_POR_OLEADA} tinta.`;
+  else mensaje = `La oleada ${o.numero} llegó a tu cuaderno. No pierdes nada: vuelve a intentarlo.`;
+  if (o.ganada && !conJefe) {
+    const faltan = faltanMinimos();
+    if (faltan.length) mensaje += ` El jefe llega al final cuando cumplas los mínimos del capítulo 1 (falta ${faltan.join(", ")}).`;
+  }
   if (o.ganada) ui.numeroOleada += 1;
   const bonus = completarSesion(estado, new Date());
   if (bonus > 0) mensaje += ` Primera oleada del día: +${bonus} tinta.`;
+  aplicarSubidas();
   ui.modo = MODO.LIBRE;
   ui.oleada = null;
+  salirJefe();
   persistir();
-  pintarTorres();
   pintarPista();
   pintarHud();
   toast(mensaje);
@@ -869,6 +919,7 @@ function pintarCampo(ahora) {
       if (m.tecnica) insignia(ctx, m.tecnica, r);
       ctx.restore();
     }
+    pintarJefeCampo(ctx, ahora);
   }
   ui.proyectiles = ui.proyectiles.filter((pr) => ahora - pr.inicio < PROYECTIL_MS);
   for (const pr of ui.proyectiles) {
@@ -902,11 +953,14 @@ let ultimoHud = 0;
 function bucle(ahora) {
   const dt = Math.min(DT_MAX_MS, ahora - ultimoFrame);
   ultimoFrame = ahora;
-  const corre = ui.modo === MODO.OLEADA && ui.oleada && ui.pantalla === PANTALLA.JUGAR && !tutorial.activo() && !ui.jefe.abierto && document.visibilityState === "visible";
+  const corre = ui.modo === MODO.OLEADA && ui.oleada && ui.pantalla === PANTALLA.JUGAR && !tutorial.activo() && document.visibilityState === "visible";
   if (corre) {
     actualizarOleada(ui.oleada, ui.trazo ? dt * CAMARA_LENTA.FACTOR : dt);
-    if (ui.oleada.terminada) terminarOleada();
-    else if (ahora - ultimoHud > 250) {
+    if (ui.oleada.terminada) {
+      if (!(ui.jefe.activo && ahora < (ui.jefe.finHasta || 0))) terminarOleada();
+    } else if (ui.oleada.jefe && !ui.jefe.activo && !ui.trazo && ahora >= ui.bloqueoHasta) {
+      llegarJefe();
+    } else if (ahora - ultimoHud > 250) {
       ultimoHud = ahora;
       pintarHud();
       pintarCola();
@@ -921,136 +975,324 @@ function bucle(ahora) {
   }
   if (ui.pantalla === PANTALLA.JUGAR) {
     pintarCampo(ahora);
-    if (ui.marca) pintarPad();
+    if (ui.marca || ui.demo) pintarPad();
   }
   requestAnimationFrame(bucle);
-}
-
-function signoMeta(p) {
-  return p.compara === COMPARA.MENOR_O_IGUAL ? "≤" : "≥";
-}
-
-function retratoJefe() {
-  return `<svg viewBox="0 0 52 52"><path d="M6 44 L26 8 L46 44 Z" fill="#1f1d2b"/><path d="M14 44 L26 22 L38 44" fill="none" stroke="#fffdf8" stroke-width="1.5"/><circle cx="20" cy="34" r="3" fill="#fffdf8"/><circle cx="32" cy="34" r="3" fill="#fffdf8"/><circle cx="26" cy="16" r="2.5" fill="#c0453a"/></svg>`;
-}
-
-function pintarPuntosDebiles() {
-  const lista = $("#puntos-debiles");
-  lista.replaceChildren();
-  const res = ui.jefe.resultado;
-  for (const p of JEFE.puntosDebiles) {
-    const meta = metaPuntoDebil(p, ui.jefe.nivel);
-    const r = res ? res.puntos.find((x) => x.id === p.id) : null;
-    lista.append(h("li", { class: r ? (r.roto ? "roto" : "fallo") : "", "data-punto": p.id },
-      h("span", { class: "ojo", "aria-hidden": "true" }),
-      h("span", {}, h("b", { text: p.nombre }), `meta ${signoMeta(p)} ${fmt(meta)}${p.unidad}`)));
-  }
-}
-
-function pintarPasoJefe() {
-  const paso = $("#jefe-paso");
-  const clas = clasificarTrazosJefe(ui.jefe.trazos, escenaJefe(tamJefe.w, tamJefe.h).fuga);
-  const falta = faltantesJefe(clas);
-  if (!ui.jefe.trazos.length) paso.textContent = "1. Traza el horizonte: una recta horizontal que pase por el punto de fuga rojo.";
-  else {
-    const fr = JEFE.minimoFrontales - falta.frontales;
-    const fu = JEFE.minimoFugantes - falta.fugantes;
-    paso.textContent = `2. Dibuja una caja en perspectiva de un punto: aristas frontales horizontales y verticales (${fr}/${JEFE.minimoFrontales}) y aristas hacia el punto de fuga (${fu}/${JEFE.minimoFugantes}).`;
-  }
-  $("#jefe-atacar").disabled = !(falta.horizonte === 0 && falta.frontales === 0 && falta.fugantes === 0) || !!ui.jefe.resultado;
 }
 
 const COLOR_TRAZO_JEFE = Object.freeze({
   [TIPO_TRAZO_JEFE.HORIZONTE]: "#7d86c9",
   [TIPO_TRAZO_JEFE.FUGANTE]: COLOR.ACENTO,
   [TIPO_TRAZO_JEFE.FRONTAL]: COLOR.TINTA,
+  [TIPO_TRAZO_JEFE.ELIPSE]: "#2f8f5b",
   [TIPO_TRAZO_JEFE.DESCARTADO]: COLOR.MAL,
 });
 
-function pintarJefe() {
-  const { ctx, w, h: alto } = tamJefe;
-  ctx.clearRect(0, 0, w, alto);
-  ctx.fillStyle = "#e9e4d8";
-  for (let x = 16; x < w; x += 24) for (let y = 16; y < alto; y += 24) ctx.fillRect(x, y, 1.2, 1.2);
-  const { fuga } = escenaJefe(w, alto);
-  punto(ctx, fuga, 13, "rgba(192,69,58,0.14)");
-  punto(ctx, fuga, 5, COLOR.MAL);
-  ctx.fillStyle = COLOR.MAL;
-  ctx.font = "11px -apple-system, system-ui, sans-serif";
-  ctx.fillText("punto de fuga", fuga.x + 10, fuga.y - 10);
-  const clas = clasificarTrazosJefe(ui.jefe.trazos, fuga);
-  ui.jefe.trazos.forEach((t, i) => trazar(ctx, t, COLOR_TRAZO_JEFE[clas[i].tipo], 2.5));
-  if (ui.jefe.trazo) trazar(ctx, ui.jefe.trazo, COLOR.TINTA, 2.5);
-}
-
-function abrirJefe() {
-  if (!jefeDesbloqueado(estado)) {
-    const faltan = minimosCapitulo(estado).filter((m) => !m.cumple).map((m) => TORRE[m.tecnica].corto.toLowerCase());
-    toast(`El jefe aparece cuando cumples los mínimos del capítulo 1. Te falta: ${faltan.join(", ")}. Míralo en Progreso.`);
-    return;
-  }
-  ui.jefe = { abierto: true, trazos: [], trazo: null, nivel: nivelJugador(estado), resultado: null };
-  $("#jefe-titulo").textContent = JEFE.nombre;
-  $("#jefe-leccion").textContent = `${JEFE.leccion} · nivel ${ui.jefe.nivel}`;
-  $("#jefe-retrato").innerHTML = retratoJefe();
-  $("#jefe-resultado").hidden = true;
-  $("#jefe").hidden = false;
-  tamJefe = ajustarCanvas(jefePad);
-  pintarPuntosDebiles();
-  pintarPasoJefe();
-  pintarJefe();
-}
-
-function cerrarJefe() {
-  ui.jefe.abierto = false;
-  $("#jefe").hidden = true;
-  pintarHud();
-}
-
-function textoPunto(p) {
-  if (p.valor === null) return `${p.nombre}: sin trazos para medir.`;
-  const valor = `${fmt(p.valor)}${p.unidad}`;
-  return `${p.texto} ${valor}${p.media ? " de media" : ""}; meta ${p.compara === COMPARA.MENOR_O_IGUAL ? "≤" : "≥"} ${fmt(p.meta)}${p.unidad}`;
-}
-
-function atacarJefe() {
-  const res = evaluarJefe(ui.jefe.trazos, escenaJefe(tamJefe.w, tamJefe.h).fuga, ui.jefe.nivel);
-  if (!res.listo) return;
-  ui.jefe.resultado = res;
-  if (res.vencido) registrarJefe(estado, true, JEFE.recompensaTinta);
-  persistir();
-  pintarPuntosDebiles();
-  pintarPasoJefe();
-  const caja = $("#jefe-resultado");
-  const rotos = res.puntos.filter((p) => p.roto).length;
-  caja.replaceChildren(
-    h("h3", { text: res.vencido ? "¡Jefe vencido!" : `Rompiste ${rotos} de ${res.puntos.length} puntos débiles` }),
-    h("p", { class: "tenue", text: res.vencido ? `+${JEFE.recompensaTinta} tinta. Las metas suben cuando sube tu nivel.` : "El jefe sigue en pie. Esto es lo que faltó:" }),
-    h("ul", {}, res.puntos.map((p) => h("li", { class: p.roto ? "bien" : "mal", text: (p.roto ? "✓ " : "✗ ") + textoPunto(p) }))),
-    h("div", { class: "jefe-acciones" },
-      h("button", { class: "btn", type: "button", onclick: cerrarJefe, text: "Salir" }),
-      h("button", { class: "btn primary", type: "button", style: "grid-column: span 2", onclick: () => { ui.jefe.trazos = []; ui.jefe.resultado = null; $("#jefe-resultado").hidden = true; pintarPuntosDebiles(); pintarPasoJefe(); pintarJefe(); }, text: "Intentar de nuevo" })),
-  );
-  caja.hidden = false;
-}
-
-conectarLienzo(jefePad, {
-  puede: () => ui.jefe.abierto && !ui.jefe.resultado,
-  empezar(p) { ui.jefe.trazo = [p]; pintarJefe(); },
-  mover(p) { if (ui.jefe.trazo) { ui.jefe.trazo.push(p); pintarJefe(); } },
-  terminar(cancelado) {
-    const t = ui.jefe.trazo;
-    ui.jefe.trazo = null;
-    if (!cancelado && t && t.length > 1) ui.jefe.trazos.push(t);
-    pintarJefe();
-    pintarPasoJefe();
-  },
+const NOMBRE_TRAZO_JEFE = Object.freeze({
+  [TIPO_TRAZO_JEFE.HORIZONTE]: "Horizonte",
+  [TIPO_TRAZO_JEFE.FUGANTE]: "Línea de fuga",
+  [TIPO_TRAZO_JEFE.FRONTAL]: "Cara frontal",
+  [TIPO_TRAZO_JEFE.ELIPSE]: "Elipse",
 });
 
-$("#jefe-salir").addEventListener("click", cerrarJefe);
-$("#jefe-deshacer").addEventListener("click", () => { if (ui.jefe.resultado) return; ui.jefe.trazos.pop(); pintarJefe(); pintarPasoJefe(); });
-$("#jefe-borrar").addEventListener("click", () => { if (ui.jefe.resultado) return; ui.jefe.trazos = []; pintarJefe(); pintarPasoJefe(); });
-$("#jefe-atacar").addEventListener("click", atacarJefe);
+const TORRE_DE_TRAZO = Object.freeze({
+  [TIPO_TRAZO_JEFE.HORIZONTE]: TECNICA.LINEA,
+  [TIPO_TRAZO_JEFE.FRONTAL]: TECNICA.LINEA,
+  [TIPO_TRAZO_JEFE.FUGANTE]: TECNICA.PERSPECTIVA,
+  [TIPO_TRAZO_JEFE.ELIPSE]: TECNICA.ELIPSE,
+});
+
+const ETIQUETA_GUIA = Object.freeze({ FUGA: "punto de fuga", CENTRO: "centro de la cara", FUENTE: "11px -apple-system, system-ui, sans-serif", SEPARACION: 10 });
+
+function arribaPad() {
+  const cabeza = $("#zona-cabeza");
+  return cabeza.offsetTop + cabeza.offsetHeight + MARGEN_PISTA;
+}
+
+function guiaJefe(ctx, p, color, texto) {
+  punto(ctx, p, 12, color === COLOR.MAL ? "rgba(192,69,58,0.16)" : "rgba(75,91,214,0.16)");
+  punto(ctx, p, 5, color);
+  ctx.fillStyle = color;
+  ctx.font = ETIQUETA_GUIA.FUENTE;
+  ctx.textBaseline = "bottom";
+  const derecha = p.x < tamPad.w * 0.7;
+  ctx.textAlign = derecha ? "left" : "right";
+  ctx.fillText(texto, p.x + (derecha ? ETIQUETA_GUIA.SEPARACION : -ETIQUETA_GUIA.SEPARACION), p.y - 6);
+  ctx.textAlign = "start";
+  ctx.textBaseline = "alphabetic";
+}
+
+function duracionDemo(n) {
+  return n * (DEMO_JEFE.TRAZO_MS + DEMO_JEFE.PAUSA_MS) + DEMO_JEFE.FINAL_MS;
+}
+
+function estadoDemo() {
+  if (!ui.demo || !ui.jefe.escena) return null;
+  const trazos = trazosDemoJefe(ui.jefe.escena);
+  const pasado = performance.now() - ui.demo.inicio;
+  if (pasado >= duracionDemo(trazos.length)) return { trazos, hechos: trazos.length, trazo: null, f: 1, fin: true };
+  const ciclo = DEMO_JEFE.TRAZO_MS + DEMO_JEFE.PAUSA_MS;
+  const hechos = Math.min(trazos.length, Math.floor(pasado / ciclo));
+  const f = hechos < trazos.length ? Math.min(1, (pasado - hechos * ciclo) / DEMO_JEFE.TRAZO_MS) : 1;
+  return { trazos, hechos, trazo: trazos[Math.min(hechos, trazos.length - 1)], f, fin: false };
+}
+
+function parcial(puntos, f) {
+  if (f >= 1) return puntos;
+  const largo = puntos.reduce((acc, p, i) => (i ? acc + Math.hypot(p.x - puntos[i - 1].x, p.y - puntos[i - 1].y) : 0), 0);
+  let resto = largo * f;
+  const salida = [puntos[0]];
+  for (let i = 1; i < puntos.length; i++) {
+    const a = puntos[i - 1];
+    const b = puntos[i];
+    const tramo = Math.hypot(b.x - a.x, b.y - a.y);
+    if (tramo >= resto) {
+      const k = tramo > 0 ? resto / tramo : 0;
+      salida.push({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });
+      return salida;
+    }
+    salida.push(b);
+    resto -= tramo;
+  }
+  return salida;
+}
+
+function pintarDemo(ctx) {
+  const d = estadoDemo();
+  if (!d) return;
+  if (d.fin) { pararDemo(); return; }
+  ctx.save();
+  ctx.globalAlpha = 0.75;
+  ctx.setLineDash([7, 6]);
+  for (let i = 0; i < d.hechos && i < d.trazos.length; i++) trazar(ctx, d.trazos[i].puntos, COLOR.GUIA, 3);
+  ctx.setLineDash([]);
+  if (d.hechos < d.trazos.length) {
+    const tramo = parcial(d.trazos[d.hechos].puntos, d.f);
+    trazar(ctx, tramo, COLOR.ACENTO, 3);
+    punto(ctx, tramo[tramo.length - 1], 6, COLOR.ACENTO);
+  }
+  ctx.restore();
+  pad.dataset.demo = JSON.stringify({ hechos: d.hechos, total: d.trazos.length, paso: d.trazo ? d.trazo.paso : null, f: Math.round(d.f * 100) / 100 });
+  const pista = $("#pad-hint");
+  const texto = d.trazo ? `Demo · ${PASO_DEMO[d.trazo.paso]}` : textoPasoJefe();
+  if (pista.textContent !== texto) pista.textContent = texto;
+}
+
+function arrancarDemo() {
+  if (!ui.jefe.activo) return;
+  ui.demo = { inicio: performance.now() };
+  ui.demo.veces = (arrancarDemo.veces = (arrancarDemo.veces || 0) + 1);
+  pad.dataset.demoVeces = String(arrancarDemo.veces);
+  pintarPad();
+}
+
+function pararDemo() {
+  ui.demo = null;
+  delete pad.dataset.demo;
+  pintarPista();
+  pintarPad();
+}
+
+function pintarEscenaJefe(ctx) {
+  const esc = ui.jefe.escena;
+  if (!esc) return;
+  const clas = clasificarTrazosJefe(ui.jefe.trazos, esc.fuga);
+  ui.jefe.trazos.forEach((t, i) => trazar(ctx, t, COLOR_TRAZO_JEFE[clas[i].tipo], 3));
+  if (ui.trazo) trazar(ctx, ui.trazo, COLOR.TINTA, 3);
+  if (ui.demo) pintarDemo(ctx);
+  guiaJefe(ctx, esc.fuga, COLOR.MAL, ETIQUETA_GUIA.FUGA);
+  guiaJefe(ctx, esc.centro, COLOR.ACENTO, ETIQUETA_GUIA.CENTRO);
+}
+
+function nuevaEscenaJefe() {
+  ui.jefe.escena = escenaJefe(tamPad.w, tamPad.h, arribaPad());
+  pad.dataset.jefe = JSON.stringify({ fuga: ui.jefe.escena.fuga, centro: ui.jefe.escena.centro, lado: ui.jefe.escena.lado });
+}
+
+function llegarJefe() {
+  ui.jefe = { ...jefeVacio(), activo: true, nivel: nivelJugador(estado) };
+  ui.ejercicio = null;
+  ui.feedback = null;
+  ui.marca = null;
+  ui.objetivoBloqueado = null;
+  delete pad.dataset.ejercicio;
+  nuevaEscenaJefe();
+  $("#lectura").replaceChildren(chip("Jefe", JEFE.nombre), chip("Vida", String(ui.oleada.jefe.vidaMax)));
+  pintarCola();
+  pintarTorres();
+  arrancarDemo();
+  pintarPista();
+  pintarHud();
+  toast(`Llega el ${JEFE.nombre}. Mira la demo y dibuja la caja: cada trazo le quita vida.`);
+}
+
+function salirJefe() {
+  clearTimeout(ui.jefe.rondaTimer);
+  ui.jefe = jefeVacio();
+  ui.demo = null;
+  delete pad.dataset.demo;
+  delete pad.dataset.jefe;
+  delete pad.dataset.resultado;
+  delete campo.dataset.jefe;
+  $("#lectura").classList.remove("puntos");
+  ui.feedback = null;
+  nuevoEjercicio(true);
+  pintarCola();
+  pintarTorres();
+}
+
+function posJefe() {
+  return { x: tamCampo.w / 2, y: tamCampo.h * BATALLA_JEFE.Y };
+}
+
+function pintarJefeCampo(ctx, ahora) {
+  const j = ui.oleada && ui.oleada.jefe;
+  if (!j || !ui.jefe.activo) return;
+  const s = escalaCampo();
+  const p = posJefe();
+  const r = BATALLA_JEFE.RADIO * s;
+  const vaiven = Math.sin(ahora / 400) * 2 * s;
+  ctx.save();
+  ctx.translate(p.x, p.y + vaiven);
+  ctx.fillStyle = j.golpeMs > 0 ? COLOR.MAL : COLOR.TINTA;
+  ctx.beginPath();
+  ctx.moveTo(-r, r * 0.8);
+  ctx.lineTo(0, -r);
+  ctx.lineTo(r, r * 0.8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = COLOR.PAPEL;
+  ctx.lineWidth = 1.5 * s;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.5, r * 0.8);
+  ctx.lineTo(0, -r * 0.1);
+  ctx.lineTo(r * 0.5, r * 0.8);
+  ctx.stroke();
+  punto(ctx, { x: -r * 0.25, y: r * 0.35 }, r * 0.12, COLOR.PAPEL);
+  punto(ctx, { x: r * 0.25, y: r * 0.35 }, r * 0.12, COLOR.PAPEL);
+  punto(ctx, { x: 0, y: -r * 0.55 }, r * 0.1, COLOR.MAL);
+  const ancho = r * 4;
+  const alto = 6 * s;
+  const y = -r - alto - 6 * s;
+  ctx.fillStyle = "rgba(31,29,43,0.15)";
+  ctx.fillRect(-ancho / 2, y, ancho, alto);
+  ctx.fillStyle = COLOR.MAL;
+  ctx.fillRect(-ancho / 2, y, ancho * Math.max(0, j.vida / j.vidaMax), alto);
+  ctx.fillStyle = COLOR.TINTA;
+  ctx.font = `700 ${Math.round(11 * s)}px -apple-system, system-ui, sans-serif`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText(`${Math.max(0, j.vida)}/${j.vidaMax}`, ancho / 2 + 6 * s, y + alto / 2);
+  ctx.textAlign = "start";
+  ctx.textBaseline = "alphabetic";
+  ctx.restore();
+  campo.dataset.jefe = JSON.stringify({ vida: j.vida, vidaMax: j.vidaMax, x: Math.round(p.x), y: Math.round(p.y) });
+}
+
+function marcaJefe(fin, grande, chico, color) {
+  ui.marca = { x: fin.x, y: fin.y, grande, extra: "", chico, color, inicio: performance.now() };
+}
+
+function textoMedidaJefe(c) {
+  if (c.tipo === TIPO_TRAZO_JEFE.ELIPSE) return c.elipse && c.elipse.valido ? `ajuste ${fmt(c.elipse.ajuste_pct)}%` : "";
+  return `${fmt(c.error_deg)}°`;
+}
+
+function chipPunto(p) {
+  const valor = p.valor === null ? "–" : `${fmt(p.valor)}${p.unidad}`;
+  return h("span", { class: "dato " + (p.roto ? "bien" : "mal"), "data-punto": p.id, title: `${p.texto} ${valor}; meta ${p.compara === COMPARA.MENOR_O_IGUAL ? "≤" : "≥"} ${fmt(p.meta)}${p.unidad}` }, `${p.roto ? "✓" : "✗"} ${p.corto || p.nombre} `, h("b", { text: valor }));
+}
+
+function danarJefe(dano) {
+  const golpe = golpearJefe(ui.oleada, dano);
+  if (golpe.dano > 0) {
+    const pj = posJefe();
+    ui.proyectiles.push({ desde: { x: tamCampo.w / 2, y: tamCampo.h * ZONA_DIBUJO.ARRIBA }, hasta: pj, inicio: performance.now() });
+    const desvio = ((ui.textos.length % 3) - 1) * BATALLA_JEFE.RADIO * escalaCampo();
+    ui.textos.push({ x: pj.x + desvio, y: pj.y - BATALLA_JEFE.RADIO * escalaCampo() - 18 * escalaCampo(), texto: `−${golpe.dano}`, inicio: performance.now(), color: COLOR.TINTA });
+  }
+  return golpe;
+}
+
+function vencerJefe() {
+  ui.jefe.vencido = true;
+  ui.jefe.bloqueoHasta = Infinity;
+  ui.demo = null;
+  registrarJefe(estado, true, JEFE.recompensaTinta);
+  aplicarSubidas();
+  persistir();
+  const pj = posJefe();
+  ui.textos.push({ x: pj.x, y: pj.y + 10 * escalaCampo(), texto: `+${JEFE.recompensaTinta}`, inicio: performance.now(), color: COLOR.ACENTO });
+  ui.jefe.finHasta = performance.now() + BATALLA_JEFE.RONDA_MS;
+}
+
+function terminarTrazoJefe(puntos) {
+  const esc = ui.jefe.escena;
+  const fin = puntos[puntos.length - 1];
+  const trazos = [...ui.jefe.trazos, puntos];
+  const clas = clasificarTrazosJefe(trazos, esc.fuga);
+  const c = clas[clas.length - 1];
+  if (c.tipo === TIPO_TRAZO_JEFE.DESCARTADO) {
+    marcaJefe(fin, "muy corto", "Traza más largo", COLOR.MAL);
+    pintarPad();
+    return;
+  }
+  if (cuentaJefe(clas)[{ [TIPO_TRAZO_JEFE.HORIZONTE]: "horizonte", [TIPO_TRAZO_JEFE.FRONTAL]: "frontales", [TIPO_TRAZO_JEFE.FUGANTE]: "fugantes", [TIPO_TRAZO_JEFE.ELIPSE]: "elipses" }[c.tipo]] > CUPO_JEFE[c.tipo]) {
+    marcaJefe(fin, "sobra", `${NOMBRE_TRAZO_JEFE[c.tipo]}: ya está. ${textoPasoJefe().replace(/^Jefe · \d\. /, "")}`, COLOR.MAL);
+    pintarPad();
+    return;
+  }
+  if (c.tipo === TIPO_TRAZO_JEFE.ELIPSE && !c.cara) {
+    marcaJefe(fin, "falta la cara", "Primero 2 horizontales y 2 verticales", COLOR.MAL);
+    pintarPad();
+    return;
+  }
+  ui.jefe.trazos = trazos;
+  const puntaje = puntajeTrazoJefe(c);
+  const dano = danoTrazoJefe(puntaje, estado.mejoras[TORRE_DE_TRAZO[c.tipo]]);
+  const golpe = danarJefe(dano);
+  if (c.tipo === TIPO_TRAZO_JEFE.ELIPSE && c.elipse) { registrarTrazo(estado, TECNICA.ELIPSE, c.elipse, new Date()); persistir(); }
+  const medida = textoMedidaJefe(c);
+  const lectura = $("#lectura");
+  lectura.classList.remove("puntos");
+  lectura.replaceChildren(
+    chip(NOMBRE_TRAZO_JEFE[c.tipo], `${Math.round(puntaje * 100)}%`, puntaje >= 0.7 ? "bien" : puntaje < 0.4 ? "mal" : ""),
+    ...(medida ? [chip(c.tipo === TIPO_TRAZO_JEFE.ELIPSE ? "Elipse" : "Error", medida)] : []),
+    ...(c.tipo === TIPO_TRAZO_JEFE.ELIPSE && c.elipse ? [chip("Cierre", `${fmt(c.elipse.cierre_pct)}%`), chip("Temblor", `${fmt(c.elipse.temblor_deg)}°`)] : []),
+    chip(golpe.dano > 0 ? "Daño" : "Sin", golpe.dano > 0 ? String(golpe.dano) : "daño", golpe.dano > 0 ? "dano" : "mal"),
+  );
+  const color = golpe.dano === 0 ? COLOR.MAL : colorPuntaje(puntaje);
+  marcaJefe(fin, golpe.dano > 0 ? `−${golpe.dano}` : "fallo", `${NOMBRE_TRAZO_JEFE[c.tipo]} ${Math.round(puntaje * 100)}%${medida ? ` · ${medida}` : ""}`, color);
+  const falta = faltantesJefe(clas);
+  if (!golpe.vencido && Object.values(falta).every((v) => v === 0)) {
+    const res = evaluarJefe(trazos, esc.fuga, ui.jefe.nivel);
+    const rotos = res.puntos.filter((p) => p.roto).length;
+    const bonus = danarJefe(danoPuntosDebiles(rotos));
+    ui.jefe.resultado = res;
+    ui.oleada.jefe.rondas += 1;
+    pad.dataset.resultado = JSON.stringify({ rotos, bonus: bonus.dano, puntos: res.puntos.map((p) => ({ id: p.id, roto: p.roto, valor: p.valor, meta: p.meta })) });
+    lectura.replaceChildren(...res.puntos.map(chipPunto));
+    lectura.classList.add("puntos");
+    marcaJefe(fin, `−${golpe.dano + bonus.dano}`, `Trazo −${golpe.dano} · ${rotos}/${res.puntos.length} puntos débiles −${bonus.dano}`, rotos ? COLOR.BIEN : COLOR.TINTA);
+    if (bonus.vencido) vencerJefe();
+    else {
+      ui.jefe.bloqueoHasta = performance.now() + BATALLA_JEFE.RONDA_MS;
+      ui.jefe.rondaTimer = setTimeout(() => {
+        if (!ui.jefe.activo || ui.jefe.vencido) return;
+        ui.jefe.trazos = [];
+        ui.jefe.resultado = null;
+        delete pad.dataset.resultado;
+        pintarPista();
+        pintarPad();
+      }, BATALLA_JEFE.RONDA_MS);
+    }
+  } else if (golpe.vencido) {
+    vencerJefe();
+  }
+  pintarPista();
+  pintarPad();
+  pintarHud();
+}
 
 function svgCurva(puntos, unidad) {
   const NS = "http://www.w3.org/2000/svg";
@@ -1106,7 +1348,7 @@ function pintarProgreso() {
   raiz.replaceChildren(
     h("div", { class: "card" },
       h("h2", { text: "Capítulo 1 · Drawabox" }),
-      h("p", { class: "tenue", text: "Líneas, elipses y cajas. Cumple los mínimos para enfrentar al jefe." }),
+      h("p", { class: "tenue", text: "Líneas, elipses y cajas. Cumple los mínimos y el jefe aparece al final de cada oleada." }),
       h("ul", { class: "lista" }, minimos.map((m) => h("li", { "data-minimo": m.tecnica },
         h("span", { class: "marca" + (m.cumple ? " hecho" : ""), text: m.cumple ? "✓" : "" }),
         h("span", { text: `${TORRE[m.tecnica].corto}: ${m.requeridos} trazos con ${METRICA_PRINCIPAL[m.tecnica].etiqueta.toLowerCase()} ≤ ${m.maximo}${m.unidad}. Llevas ${Math.min(m.trazos, m.requeridos)}/${m.requeridos} · ${fmt(m.metrica)}${m.unidad}.` }))),
@@ -1182,7 +1424,15 @@ for (const b of document.querySelectorAll(".tabbar button")) {
 }
 
 $("#btn-oleada").addEventListener("click", iniciarOleada);
-$("#btn-jefe").addEventListener("click", abrirJefe);
+$("#btn-demo").addEventListener("click", arrancarDemo);
+$("#btn-borrar").addEventListener("click", () => {
+  if (!ui.jefe.activo || ui.jefe.vencido || performance.now() < ui.jefe.bloqueoHasta) return;
+  ui.jefe.trazos = [];
+  ui.marca = null;
+  pintarPista();
+  pintarPad();
+  pintarHud();
+});
 
 const tutorial = crearTutorial({
   raiz: $("#tuto"),
@@ -1223,16 +1473,18 @@ function redimensionar() {
   const antesH = tamPad.h;
   tamCampo = ajustarCanvas(campo);
   tamPad = ajustarCanvas(pad);
-  if (!ui.ejercicio || antesW !== tamPad.w || antesH !== tamPad.h) { ui.feedback = null; nuevoEjercicio(true); }
+  const cambio = antesW !== tamPad.w || antesH !== tamPad.h;
+  if (ui.jefe.activo) {
+    if (cambio || !ui.jefe.escena) { ui.jefe.trazos = []; nuevaEscenaJefe(); pintarPista(); }
+    pintarPad();
+  } else if (!ui.ejercicio || cambio) { ui.feedback = null; nuevoEjercicio(true); }
   else pintarPad();
-  if (ui.jefe.abierto) { tamJefe = ajustarCanvas(jefePad); pintarJefe(); }
 }
 
 if (typeof ResizeObserver === "function") {
   const ro = new ResizeObserver(() => redimensionar());
   ro.observe($("#pad-wrap"));
   ro.observe($("#campo-wrap"));
-  ro.observe($("#jefe-wrap"));
 } else {
   window.addEventListener("resize", redimensionar);
 }
@@ -1243,6 +1495,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 document.getElementById("bar-version").textContent = `v${APP_VERSION}`;
+if (aplicarSubidas().length) persistir();
 pintarTinta();
 pintarTorres();
 redimensionar();

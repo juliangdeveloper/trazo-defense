@@ -98,8 +98,7 @@ button { font: inherit; color: inherit; }
 }
 .chip-btn.primary { background: var(--tinta); color: var(--hoja); border-color: var(--tinta); }
 .chip-btn:disabled { opacity: 0.45; cursor: default; }
-.jefe-btn.bloqueado { color: var(--tenue); }
-.jefe-btn.listo { background: var(--mal); color: #fff; border-color: var(--mal); }
+.demo-btn { background: var(--mal); color: #fff; border-color: var(--mal); }
 
 .campo-wrap {
   flex: 1 1 auto;
@@ -201,10 +200,10 @@ button { font: inherit; color: inherit; }
 }
 .mejora-btn .mas { font-size: 14px; font-weight: 800; }
 .mejora-btn small { font-size: 11.5px; font-weight: 700; }
-.mejora-btn.sin-tinta { background: #e7e2d6; color: var(--tenue); }
+.mejora-btn.progreso { background: linear-gradient(to right, #aeb6f0 var(--p), #e6e8fb var(--p)); color: var(--tinta); font-variant-numeric: tabular-nums; }
+.mejora-btn.espera { background: #e7e2d6; color: #8d877a; }
 .mejora-btn.maximo { background: #f4e7c8; color: #8a6420; }
 .mejora-btn.maximo .mas { font-size: 11.5px; letter-spacing: 0.02em; }
-.torre.sin-tinta:not(.maximo) .torre-btn svg { opacity: 0.72; }
 .torre-aviso {
   position: absolute;
   left: 50%;
@@ -221,7 +220,6 @@ button { font: inherit; color: inherit; }
   z-index: 5;
   animation: aviso 1.6s ease-out forwards;
 }
-.torre-aviso.falla { background: var(--mal); }
 .torre:first-child .torre-aviso { left: 0; transform: none; }
 .torre:last-child .torre-aviso { left: auto; right: 0; transform: none; }
 @keyframes aviso { 0% { opacity: 0; } 12% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
@@ -257,6 +255,8 @@ button { font: inherit; color: inherit; }
 .dato.bien { color: var(--bien); border-color: #bfe3cf; }
 .dato.mal { color: var(--mal); border-color: #f0c7c2; }
 .dato.dano { background: var(--tinta); color: var(--hoja); border-color: var(--tinta); }
+.lectura.puntos { font-size: 11.5px; gap: 3px 4px; }
+.lectura.puntos .dato { padding: 2px 6px; }
 
 .tabbar {
   flex: 0 0 auto;
@@ -330,52 +330,6 @@ button { font: inherit; color: inherit; }
 .proyecto.estado-2 .proyecto-fase { color: var(--aviso); }
 .proyecto.estado-4 .proyecto-fase { color: var(--bien); }
 
-.jefe {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  background: var(--papel);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: calc(8px + var(--top)) calc(12px + var(--right)) calc(10px + var(--bottom)) calc(12px + var(--left));
-  max-width: 560px;
-  margin: 0 auto;
-}
-.jefe-cabeza { display: flex; align-items: center; gap: 10px; }
-.jefe-retrato { width: 52px; height: 52px; flex: 0 0 52px; }
-.jefe-retrato svg { width: 100%; height: 100%; }
-.jefe-info { flex: 1 1 auto; min-width: 0; }
-.jefe-info h2 { margin: 0; font-size: 17px; line-height: 1.2; }
-.jefe-leccion { margin: 2px 0 0; font-size: 12px; color: var(--tenue); }
-.puntos-debiles { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.puntos-debiles li { border: 1px solid var(--linea); background: var(--hoja); border-radius: 10px; padding: 5px 8px; font-size: 12px; line-height: 1.25; display: flex; gap: 6px; align-items: center; }
-.puntos-debiles li b { display: block; font-size: 13px; }
-.puntos-debiles .ojo { width: 12px; height: 12px; border-radius: 50%; background: var(--mal); flex: 0 0 12px; box-shadow: 0 0 0 3px #f6d8d4; }
-.puntos-debiles li.roto .ojo { background: var(--bien); box-shadow: 0 0 0 3px #d3eedf; }
-.puntos-debiles li.fallo { border-color: #f0c7c2; }
-.jefe-paso { margin: 0; font-size: 13px; line-height: 1.35; min-height: 36px; }
-.jefe-pad { flex: 1 1 auto; }
-.jefe-acciones { display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 6px; }
-.jefe-resultado {
-  position: absolute;
-  left: calc(12px + var(--left));
-  right: calc(12px + var(--right));
-  bottom: calc(10px + var(--bottom));
-  background: var(--hoja);
-  border: 1px solid var(--linea);
-  border-radius: var(--radio);
-  padding: 14px;
-  box-shadow: 0 12px 40px rgba(31, 29, 43, 0.18);
-  max-height: 70%;
-  overflow-y: auto;
-}
-.jefe-resultado h3 { margin: 0 0 6px; font-size: 17px; }
-.jefe-resultado p, .jefe-resultado li { font-size: 14px; line-height: 1.4; }
-.jefe-resultado ul { margin: 6px 0; padding-left: 18px; }
-.jefe-resultado .bien { color: var(--bien); }
-.jefe-resultado .mal { color: var(--mal); }
-
 .tuto { position: absolute; inset: 0; pointer-events: none; }
 .tuto-velo { position: absolute; inset: 0; z-index: 50; background: rgba(31, 29, 43, 0.45); pointer-events: auto; }
 .tuto.interactivo .tuto-velo { background: rgba(31, 29, 43, 0.3); }
@@ -420,13 +374,14 @@ button { font: inherit; color: inherit; }
 @media (max-height: 680px) and (max-width: 699px) {
   #screen-jugar { gap: 6px; padding: 6px 0; }
   .lectura { flex-basis: 30px; height: 30px; }
+  .lectura.puntos { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .lectura.puntos::-webkit-scrollbar { display: none; }
   .hud { min-height: 44px; }
 }
 @media (min-width: 700px) {
   .view { max-width: 900px; padding: 0 calc(16px + var(--right)) 0 calc(16px + var(--left)); }
   #screen-jugar { gap: 10px; padding: 12px 0; }
   .hud-estado { font-size: 16px; }
-  .jefe { max-width: 760px; }
   .zona-cabeza .pad-hint { font-size: 15px; }
   .cola-item { width: 28px; height: 28px; }
   .cola-item svg { width: 18px; height: 18px; }

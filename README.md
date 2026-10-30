@@ -15,8 +15,8 @@
 - **Perspectiva:** cierra un cubo en perspectiva de un punto con 3 rectas hacia el punto de fuga. Se mide la convergencia en grados, el cierre en las esquinas y la rectitud.
 - Las tres torres están disponibles desde el inicio. En una oleada los monstruos mezclan técnicas y el que va primero elige la torre y el ejercicio.
 - Mejor trazo, más daño. Cada resultado muestra sus métricas.
-- **Mejoras:** cada torre está en el campo con su nivel y un botón + con el costo en tinta; en una oleada también se mejora tocando la torre. Son 5 niveles que alternan más daño y más objetivos, y la torre cambia de aspecto. El daño sigue dependiendo del puntaje del trazo.
-- **Jefe:** con los mínimos del capítulo 1 cumplidos, dibuja horizonte, cara frontal y líneas de fuga para romper sus 4 puntos débiles.
+- **Mejoras:** cada 10 de tinta la torre de menor nivel sube sola (empate: línea, elipse, perspectiva). Cada torre muestra su nivel y la tinta que lleva hacia la siguiente mejora, por ejemplo 7/10. Son 5 niveles que alternan más daño y más objetivos, y la torre cambia de aspecto. El daño sigue dependiendo del puntaje del trazo.
+- **Jefe:** con los mínimos del capítulo 1 cumplidos, aparece al final de cada oleada en el mismo campo, con una demo animada que se repite con «Ver demo». Dibujas horizonte, cara frontal, 4 líneas de fuga y una elipse dentro de la cara, guiado por el punto de fuga y el centro de la cara. Cada trazo le quita vida según su calidad y, al cerrar la caja, cada uno de sus 5 puntos débiles roto (horizonte, líneas de fuga, cara frontal, seguridad y elipse) le quita más. Vencerlo da 30 de tinta. Sin los mínimos, la oleada termina normal y te dice qué falta.
 - La primera oleada que terminas cada día da tinta extra. No hay rachas ni se pierde nada.
 - El tutorial se puede repetir desde Ajustes.
 

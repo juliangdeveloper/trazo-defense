@@ -317,29 +317,81 @@ export function resumenCubo(resultados, total = PUNTAJE.CUBO_LINEAS) {
   };
 }
 
-export const TIPO_TRAZO_JEFE = Object.freeze({ HORIZONTE: "horizonte", FUGANTE: "fugante", FRONTAL: "frontal", DESCARTADO: "descartado" });
+export const TIPO_TRAZO_JEFE = Object.freeze({ HORIZONTE: "horizonte", FUGANTE: "fugante", FRONTAL: "frontal", ELIPSE: "elipse", DESCARTADO: "descartado" });
 
 export function desvioDeEje(recta) {
   const ang = Math.abs(Math.atan2(recta.uy, recta.ux) * GRADOS) % 180;
   return Math.min(ang, Math.abs(ang - 90), 180 - ang);
 }
 
+function esVertical(recta) {
+  return Math.abs(recta.uy) > Math.abs(recta.ux);
+}
+
+export function pareceElipse(puntos) {
+  if (trazoCorto(puntos)) return false;
+  const { pct } = rectitudPct(puntos);
+  if (pct < JEFE.elipseRectitudMinPct) return false;
+  let cx = 0;
+  let cy = 0;
+  for (const p of puntos) { cx += p.x; cy += p.y; }
+  return barridoAngular(puntos, cx / puntos.length, cy / puntos.length) >= JEFE.elipseBarridoMinDeg;
+}
+
+function clasificarLinea(puntos, indice, fuga, horizonteLibre) {
+  const { recta, pct, largo } = rectitudPct(puntos);
+  const repasos = contarRepasos(puntos, recta.ux, recta.uy, largo);
+  const seguro = pct <= JEFE.rectitudSeguraPct && repasos === 0 && puntajeSeguridad(velocidad(puntos)) >= 0.5;
+  const comun = { indice, rectitud_pct: redondear(pct, 1), repasos, seguro };
+  if (horizonteLibre) {
+    const ang = Math.abs(Math.atan2(recta.uy, recta.ux) * GRADOS) % 180;
+    return { ...comun, tipo: TIPO_TRAZO_JEFE.HORIZONTE, error_deg: Math.min(ang, 180 - ang) };
+  }
+  const haciaFuga = desvioHaciaFuga(puntos, fuga);
+  const deEje = desvioDeEje(recta);
+  if (haciaFuga < deEje) return { ...comun, tipo: TIPO_TRAZO_JEFE.FUGANTE, error_deg: haciaFuga };
+  return { ...comun, tipo: TIPO_TRAZO_JEFE.FRONTAL, error_deg: deEje, vertical: esVertical(recta), cx: recta.cx, cy: recta.cy };
+}
+
+export function caraFrontal(clasificados) {
+  const frontales = clasificados.filter((c) => c.tipo === TIPO_TRAZO_JEFE.FRONTAL);
+  const verticales = frontales.filter((c) => c.vertical).map((c) => c.cx).sort((a, b) => a - b);
+  const horizontales = frontales.filter((c) => !c.vertical).map((c) => c.cy).sort((a, b) => a - b);
+  if (verticales.length < 2 || horizontales.length < 2) return null;
+  const x = verticales[0];
+  const y = horizontales[0];
+  const w = verticales[verticales.length - 1] - x;
+  const h = horizontales[horizontales.length - 1] - y;
+  if (w < PUNTAJE.TRAZO_MIN_PX || h < PUNTAJE.TRAZO_MIN_PX) return null;
+  return { x, y, w, h };
+}
+
 export function clasificarTrazosJefe(trazos, fuga) {
-  return trazos.map((puntos, indice) => {
-    if (trazoCorto(puntos)) return { tipo: TIPO_TRAZO_JEFE.DESCARTADO, indice };
-    const { recta, pct, largo } = rectitudPct(puntos);
-    const repasos = contarRepasos(puntos, recta.ux, recta.uy, largo);
-    const seguro = pct <= JEFE.rectitudSeguraPct && repasos === 0 && puntajeSeguridad(velocidad(puntos)) >= 0.5;
-    const comun = { indice, rectitud_pct: pct, repasos, seguro };
-    if (indice === 0) {
-      const ang = Math.abs(Math.atan2(recta.uy, recta.ux) * GRADOS) % 180;
-      return { ...comun, tipo: TIPO_TRAZO_JEFE.HORIZONTE, error_deg: Math.min(ang, 180 - ang) };
-    }
-    const haciaFuga = desvioHaciaFuga(puntos, fuga);
-    const deEje = desvioDeEje(recta);
-    if (haciaFuga < deEje) return { ...comun, tipo: TIPO_TRAZO_JEFE.FUGANTE, error_deg: haciaFuga };
-    return { ...comun, tipo: TIPO_TRAZO_JEFE.FRONTAL, error_deg: deEje };
+  const salida = [];
+  let horizonteLibre = true;
+  trazos.forEach((puntos, indice) => {
+    if (trazoCorto(puntos)) { salida.push({ tipo: TIPO_TRAZO_JEFE.DESCARTADO, indice }); return; }
+    if (pareceElipse(puntos)) { salida.push({ tipo: TIPO_TRAZO_JEFE.ELIPSE, indice, seguro: false }); return; }
+    salida.push(clasificarLinea(puntos, indice, fuga, horizonteLibre));
+    horizonteLibre = false;
   });
+  const cara = caraFrontal(salida);
+  for (const c of salida) {
+    if (c.tipo !== TIPO_TRAZO_JEFE.ELIPSE) continue;
+    const r = cara ? evaluarElipse(trazos[c.indice], cara) : null;
+    c.cara = cara;
+    c.elipse = r;
+  }
+  return salida;
+}
+
+export function puntajeTrazoJefe(c) {
+  if (!c || c.tipo === TIPO_TRAZO_JEFE.DESCARTADO) return 0;
+  if (c.tipo === TIPO_TRAZO_JEFE.ELIPSE) return c.elipse && c.elipse.valido ? c.elipse.puntaje : 0;
+  const base = 0.6 * clamp01(1 - c.error_deg / JEFE.toleranciaDeg)
+    + 0.25 * clamp01(1 - c.rectitud_pct / PUNTAJE.PERSPECTIVA_RECTITUD_MAX_PCT)
+    + 0.15 * (c.seguro ? 1 : 0);
+  return redondear(clamp01(base * factorRepasos(c.repasos)), 3);
 }
 
 export function metaPuntoDebil(punto, nivel) {
@@ -352,35 +404,52 @@ function promedio(lista) {
   return lista.length ? lista.reduce((s, v) => s + v, 0) / lista.length : NaN;
 }
 
-export function faltantesJefe(clasificados) {
-  const fugantes = clasificados.filter((c) => c.tipo === TIPO_TRAZO_JEFE.FUGANTE).length;
-  const frontales = clasificados.filter((c) => c.tipo === TIPO_TRAZO_JEFE.FRONTAL).length;
-  const horizonte = clasificados.some((c) => c.tipo === TIPO_TRAZO_JEFE.HORIZONTE);
+export function cuentaJefe(clasificados) {
+  const cuenta = (tipo) => clasificados.filter((c) => c.tipo === tipo).length;
   return {
-    horizonte: horizonte ? 0 : 1,
-    fugantes: Math.max(0, JEFE.minimoFugantes - fugantes),
-    frontales: Math.max(0, JEFE.minimoFrontales - frontales),
+    horizonte: cuenta(TIPO_TRAZO_JEFE.HORIZONTE),
+    frontales: cuenta(TIPO_TRAZO_JEFE.FRONTAL),
+    fugantes: cuenta(TIPO_TRAZO_JEFE.FUGANTE),
+    elipses: cuenta(TIPO_TRAZO_JEFE.ELIPSE),
+  };
+}
+
+export const CUPO_JEFE = Object.freeze({
+  [TIPO_TRAZO_JEFE.HORIZONTE]: JEFE.minimoHorizonte,
+  [TIPO_TRAZO_JEFE.FRONTAL]: JEFE.minimoFrontales,
+  [TIPO_TRAZO_JEFE.FUGANTE]: JEFE.minimoFugantes,
+  [TIPO_TRAZO_JEFE.ELIPSE]: JEFE.minimoElipses,
+});
+
+export function faltantesJefe(clasificados) {
+  const n = cuentaJefe(clasificados);
+  return {
+    horizonte: Math.max(0, JEFE.minimoHorizonte - n.horizonte),
+    frontales: Math.max(0, JEFE.minimoFrontales - n.frontales),
+    fugantes: Math.max(0, JEFE.minimoFugantes - n.fugantes),
+    elipses: Math.max(0, JEFE.minimoElipses - n.elipses),
   };
 }
 
 export function evaluarJefe(trazos, fuga, nivel) {
   const clasificados = clasificarTrazosJefe(trazos, fuga);
   const falta = faltantesJefe(clasificados);
-  const listo = falta.horizonte === 0 && falta.fugantes === 0 && falta.frontales === 0;
+  const listo = Object.values(falta).every((v) => v === 0);
+  const deTipo = (tipo) => clasificados.filter((c) => c.tipo === tipo);
+  const lineas = clasificados.filter((c) => c.tipo !== TIPO_TRAZO_JEFE.DESCARTADO && c.tipo !== TIPO_TRAZO_JEFE.ELIPSE);
+  const elipses = deTipo(TIPO_TRAZO_JEFE.ELIPSE).filter((c) => c.elipse && c.elipse.valido);
   const medidas = {
-    [PUNTO_DEBIL.HORIZONTE]: promedio(clasificados.filter((c) => c.tipo === TIPO_TRAZO_JEFE.HORIZONTE).map((c) => c.error_deg)),
-    [PUNTO_DEBIL.FUGANTES]: promedio(clasificados.filter((c) => c.tipo === TIPO_TRAZO_JEFE.FUGANTE).map((c) => c.error_deg)),
-    [PUNTO_DEBIL.FRONTALES]: promedio(clasificados.filter((c) => c.tipo === TIPO_TRAZO_JEFE.FRONTAL).map((c) => c.error_deg)),
-    [PUNTO_DEBIL.SEGURIDAD]: (() => {
-      const validos = clasificados.filter((c) => c.tipo !== TIPO_TRAZO_JEFE.DESCARTADO);
-      return validos.length ? (validos.filter((c) => c.seguro).length / validos.length) * 100 : NaN;
-    })(),
+    [PUNTO_DEBIL.HORIZONTE]: promedio(deTipo(TIPO_TRAZO_JEFE.HORIZONTE).map((c) => c.error_deg)),
+    [PUNTO_DEBIL.FUGANTES]: promedio(deTipo(TIPO_TRAZO_JEFE.FUGANTE).map((c) => c.error_deg)),
+    [PUNTO_DEBIL.FRONTALES]: promedio(deTipo(TIPO_TRAZO_JEFE.FRONTAL).map((c) => c.error_deg)),
+    [PUNTO_DEBIL.SEGURIDAD]: lineas.length ? (lineas.filter((c) => c.seguro).length / lineas.length) * 100 : NaN,
+    [PUNTO_DEBIL.ELIPSE]: elipses.length ? Math.max(...elipses.map((c) => c.elipse.puntaje)) * 100 : NaN,
   };
   const puntos = JEFE.puntosDebiles.map((punto) => {
     const meta = metaPuntoDebil(punto, nivel);
     const valor = medidas[punto.id];
     const roto = Number.isFinite(valor) && (punto.compara === COMPARA.MENOR_O_IGUAL ? valor <= meta : valor >= meta);
-    return { id: punto.id, nombre: punto.nombre, texto: punto.texto, media: punto.media, unidad: punto.unidad, compara: punto.compara, valor: Number.isFinite(valor) ? redondear(valor, 1) : null, meta: redondear(meta, 1), roto };
+    return { id: punto.id, nombre: punto.nombre, corto: punto.corto, texto: punto.texto, media: punto.media, unidad: punto.unidad, compara: punto.compara, valor: Number.isFinite(valor) ? redondear(valor, 1) : null, meta: redondear(meta, 1), roto };
   });
   return { listo, falta, clasificados, puntos, vencido: listo && puntos.every((p) => p.roto) };
 }

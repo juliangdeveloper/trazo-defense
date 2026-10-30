@@ -176,21 +176,31 @@ export function tecnicaMasDebil(estado) {
   return peor;
 }
 
-export function costoMejora(estado, tecnica) {
-  const nivel = estado.mejoras[tecnica] || 0;
-  return nivel >= MEJORA.MAX ? null : MEJORA.COSTOS[nivel];
+export function siguienteMejora(estado) {
+  let elegida = null;
+  for (const t of TECNICAS) {
+    const nivel = estado.mejoras[t] || 0;
+    if (nivel >= MEJORA.MAX) continue;
+    if (elegida === null || nivel < estado.mejoras[elegida]) elegida = t;
+  }
+  return elegida;
 }
 
-export function puedeMejorar(estado, tecnica) {
-  const costo = costoMejora(estado, tecnica);
-  return costo !== null && estado.tinta >= costo;
+export function progresoTinta(estado) {
+  if (siguienteMejora(estado) === null) return null;
+  return Math.min(MEJORA.TINTA_POR_NIVEL - 1, Math.floor(estado.tinta));
 }
 
-export function mejorarTorre(estado, tecnica) {
-  if (!puedeMejorar(estado, tecnica)) return false;
-  estado.tinta -= costoMejora(estado, tecnica);
-  estado.mejoras[tecnica] += 1;
-  return true;
+export function subirConTinta(estado) {
+  const subidas = [];
+  let t = siguienteMejora(estado);
+  while (t !== null && estado.tinta >= MEJORA.TINTA_POR_NIVEL) {
+    estado.tinta -= MEJORA.TINTA_POR_NIVEL;
+    estado.mejoras[t] += 1;
+    subidas.push({ tecnica: t, nivel: estado.mejoras[t] });
+    t = siguienteMejora(estado);
+  }
+  return subidas;
 }
 
 export function bonusDisponible(estado, fecha) {
