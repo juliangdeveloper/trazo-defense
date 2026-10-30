@@ -1,4 +1,4 @@
-import { CAMINO, MONSTRUO, OLEADA, TORRE, PUNTAJE, MEJORA, MEZCLA, TECNICAS, JEFE } from "./config.js";
+import { CAMINO, MONSTRUO, OLEADA, TORRE, PUNTAJE, MEJORA, MEZCLA, TECNICAS, JEFE, ATAQUE, NIVEL_ATAQUE } from "./config.js";
 
 export function largoCamino(camino = CAMINO) {
   let total = 0;
@@ -123,9 +123,17 @@ export function jefeActivo(oleada) {
   return Boolean(oleada && oleada.jefe && oleada.jefe.vida > 0 && !oleada.terminada);
 }
 
-export function danoTrazoJefe(puntaje, mejora = 0) {
-  if (!Number.isFinite(puntaje) || puntaje < PUNTAJE.FALLO_BAJO) return 0;
-  return Math.round(JEFE.danoTrazo * puntaje * efectoMejora(mejora).multiplicador);
+export function multiplicadorDeNiveles(niveles) {
+  if (!Array.isArray(niveles) || !niveles.length) return 0;
+  return niveles.reduce((s, n) => s + (NIVEL_ATAQUE.MULTIPLICADOR[n] || 0), 0) / niveles.length;
+}
+
+export function danoAtaqueJefe(niveles, mejora = 0) {
+  return Math.round(ATAQUE.DANO_TRAZO * multiplicadorDeNiveles(niveles) * efectoMejora(mejora).multiplicador);
+}
+
+export function danoAtaqueFinal(niveles) {
+  return Math.round(ATAQUE.DANO_FINAL * multiplicadorDeNiveles(niveles));
 }
 
 export function danoPuntosDebiles(rotos) {

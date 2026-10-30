@@ -1,5 +1,5 @@
 const PREFIX = "trazo-defense-";
-const CACHE = PREFIX + "v0.1.11";
+const CACHE = PREFIX + "v0.1.12";
 const ASSETS = [
   "./",
   "./index.html",
@@ -11,6 +11,7 @@ const ASSETS = [
   "./js/game.js",
   "./js/ejercicios.js",
   "./js/tutorial.js",
+  "./js/destello.js",
   "./js/app.js",
   "./js/vendor/perfect-freehand/index.mjs",
   "./manifest.json",

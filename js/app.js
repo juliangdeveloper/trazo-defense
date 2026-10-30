@@ -1,18 +1,19 @@
 import {
   APP_ID, APP_VERSION, SAVE_KEY, TECNICA, TECNICAS, TORRE, METRICA_PRINCIPAL, CAMINO, PUNTAJE,
   JEFE, COMPARA, PANTALLA, MODO, FASE_PUNTOS, PUNTO_FASE, FASES_NOMBRE, ESTADOS_NOMBRE, TIPOS_NOMBRE, TOTAL_FASES, OLEADA, MEJORA, CAMARA_LENTA, ZONA_DIBUJO, COLA,
-  DEMO_JEFE, BATALLA_JEFE, PALMA, DESHACER,
+  DEMO_JEFE, BATALLA_JEFE, PALMA, DESHACER, DESTELLO, DIMENSIONES, NIVEL_ATAQUE,
 } from "./config.js";
 import { PROYECTO, FASE, metaProyecto, metaUpdate, metaRead, crearEscritor } from "./meta.js";
-import { evaluarLinea, evaluarElipse, evaluarFugante, asignarArista, resumenCubo, evaluarJefe, clasificarTrazosJefe, faltantesJefe, cuentaJefe, puntajeTrazoJefe, CUPO_JEFE, TIPO_TRAZO_JEFE } from "./geometry.js";
+import { evaluarLinea, evaluarElipse, evaluarFugante, asignarArista, resumenCubo, evaluarJefe, clasificarTrazosJefe, faltantesJefe, cuentaJefe, CUPO_JEFE, TIPO_TRAZO_JEFE, calificarAtaque, combinarAtaques } from "./geometry.js";
 import {
   STATS, cargar, guardar, registrarTrazo, promedioMovil, nivelTecnica, nivelJugador, minimosCapitulo, jefeDesbloqueado,
   tecnicaMasDebil, siguienteMejora, progresoTinta, subirConTinta, completarSesion, registrarOleada, registrarJefe, curva, statsMeta, logrosDe,
 } from "./progress.js";
-import { crearOleada, actualizarOleada, objetivoPrincipal, elegirObjetivo, puntoEnCamino, danoDeTrazo, atacar, tipoMonstruo, efectoMejora, proximasTecnicas, danoTrazoJefe, danoPuntosDebiles, golpearJefe, cobrarTinta } from "./game.js";
+import { crearOleada, actualizarOleada, objetivoPrincipal, elegirObjetivo, puntoEnCamino, danoDeTrazo, atacar, tipoMonstruo, efectoMejora, proximasTecnicas, danoAtaqueJefe, danoAtaqueFinal, multiplicadorDeNiveles, danoPuntosDebiles, golpearJefe, cobrarTinta } from "./game.js";
 import { crearEjercicio, escenaJefe, azarJefe, trazosDemoJefe, aristasCubo } from "./ejercicios.js";
 import { crearTutorial, ACCION_TUTORIAL } from "./tutorial.js";
 import { getStroke } from "./vendor/perfect-freehand/index.mjs";
+import { crearImagenDestello, radioVisible } from "./destello.js";
 
 const COLOR = Object.freeze({
   TINTA: "#1f1d2b",
@@ -93,11 +94,12 @@ const ui = {
   demo: null,
   deshacer: [],
   timerSiguiente: 0,
+  destellos: [],
   jefe: jefeVacio(),
 };
 
 function jefeVacio() {
-  return { activo: false, trazos: [], nivel: 1, escena: null, azar: null, resultado: null, bloqueoHasta: 0, vencido: false, rondaTimer: 0 };
+  return { activo: false, trazos: [], nivel: 1, escena: null, azar: null, resultado: null, ataques: [], bloqueoHasta: 0, vencido: false, rondaTimer: 0 };
 }
 
 function toast(texto) {
@@ -147,7 +149,9 @@ zonaDibujo.style.height = `${(ZONA_DIBUJO.ABAJO - ZONA_DIBUJO.ARRIBA) * 100}%`;
 const torresEl = $("#torres");
 torresEl.style.top = `${ZONA_DIBUJO.ABAJO * 100}%`;
 const pad = $("#pad");
+const lienzoDestello = $("#destello");
 let tamCampo = ajustarCanvas(campo);
+let tamDestello = ajustarCanvas(lienzoDestello);
 let tamPad = ajustarCanvas(pad);
 
 function pintarTinta() {
@@ -864,7 +868,7 @@ function pintarTorres() {
 function elegirTorre(t) {
   if (tutorial.activo() && tutorial.esperaTrazo()) return;
   if (ui.jefe.activo) {
-    toast("Contra el jefe no eliges torre: dibuja la caja y cada trazo le hace daño.");
+    toast("Contra el jefe no eliges torre: dibuja la caja y cada trazo es un ataque.");
     return;
   }
   const pedida = tecnicaPedida();
@@ -894,6 +898,7 @@ function pintarHud() {
   ola.hidden = ui.jefe.activo;
   demo.hidden = !ui.jefe.activo;
   demo.disabled = ui.jefe.vencido;
+  $("#btn-leyenda").hidden = !ui.jefe.activo;
   const borrar = $("#btn-borrar");
   borrar.hidden = !ui.jefe.activo;
   borrar.disabled = ui.jefe.vencido || !ui.jefe.trazos.length;
@@ -937,6 +942,8 @@ function deshacer() {
   delete pad.dataset.marca;
   if (paso.modo === "jefe") {
     ui.jefe.trazos = ui.jefe.trazos.slice(0, -1);
+    ui.jefe.ataques = ui.jefe.ataques.slice(0, -1);
+    ui.destellos = ui.destellos.filter((d) => d.id !== paso.destello);
     const j = ui.oleada && ui.oleada.jefe;
     if (j) j.vida = Math.min(j.vidaMax, j.vida + paso.dano);
     $("#lectura").replaceChildren(chip("Deshecho", paso.dano > 0 ? `+${paso.dano} vida al jefe` : "sin daño"));
@@ -1140,6 +1147,7 @@ function bucle(ahora) {
   }
   if (ui.pantalla === PANTALLA.JUGAR) {
     pintarCampo(ahora);
+    pintarDestellos(ahora);
     if (ui.marca || ui.demo) componerPad();
   }
   requestAnimationFrame(bucle);
@@ -1294,7 +1302,7 @@ function llegarJefe() {
   arrancarDemo();
   pintarPista();
   pintarHud();
-  toast(`Llega el ${JEFE.nombre}. Mira la demo y dibuja la caja: cada trazo le quita vida.`);
+  toast(`Llega el ${JEFE.nombre}. Mira la demo y dibuja la caja: cada trazo es un ataque.`);
 }
 
 function salirJefe() {
@@ -1365,14 +1373,59 @@ function marcaJefe(fin, grande, chico, color) {
   ui.marca = { x: fin.x, y: fin.y, grande, extra: "", chico, color, inicio: performance.now() };
 }
 
-function textoMedidaJefe(c) {
-  if (c.tipo === TIPO_TRAZO_JEFE.ELIPSE) return c.elipse && c.elipse.valido ? `ajuste ${fmt(c.elipse.ajuste_pct)}%` : "";
-  return `${fmt(c.error_deg)}°`;
-}
-
 function chipPunto(p) {
   const valor = p.valor === null ? "–" : `${fmt(p.valor)}${p.unidad}`;
   return h("span", { class: "dato " + (p.roto ? "bien" : "mal"), "data-punto": p.id, title: `${p.texto} ${valor}; meta ${p.compara === COMPARA.MENOR_O_IGUAL ? "≤" : "≥"} ${fmt(p.meta)}${p.unidad}` }, `${p.roto ? "✓" : "✗"} ${p.corto || p.nombre} `, h("b", { text: valor }));
+}
+
+function resumenNiveles(ataque) {
+  const media = ataque.niveles.reduce((s, n) => s + n, 0) / ataque.niveles.length;
+  return NIVEL_ATAQUE.NOMBRES[Math.round(media)];
+}
+
+function chipsAtaque(ataque) {
+  return DIMENSIONES.map((d, i) => h("span", { class: `dato nivel-${ataque.niveles[i]}`, "data-dimension": d.id, title: `${d.nombre}: ${NIVEL_ATAQUE.NOMBRES[ataque.niveles[i]]}` }, `${d.corto} `, h("b", { text: NIVEL_ATAQUE.NOMBRES[ataque.niveles[i]] })));
+}
+
+let siguienteDestello = 1;
+
+function lanzarDestello(ataque, retrasoMs) {
+  const radio = DESTELLO.RADIO * escalaCampo() * (ataque.final ? DESTELLO.ESCALA_FINAL : 1);
+  const imagen = crearImagenDestello(ataque.niveles, radio, window.devicePixelRatio || 1);
+  const id = siguienteDestello++;
+  ui.destellos.push({ id, imagen, radio, niveles: ataque.niveles, final: Boolean(ataque.final), inicio: performance.now() + retrasoMs });
+  return id;
+}
+
+function centroDestello(radio) {
+  const p = posJefe();
+  const visible = radioVisible(radio);
+  return { x: p.x, y: Math.max(p.y, Math.min(visible, tamDestello.h / 2)) };
+}
+
+function pintarDestellos(ahora) {
+  const { ctx, w, h: alto } = tamDestello;
+  if (!ui.destellos.length && !pintarDestellos.sucio) return;
+  ctx.clearRect(0, 0, w, alto);
+  pintarDestellos.sucio = false;
+  ui.destellos = ui.destellos.filter((d) => ahora - d.inicio < DESTELLO.MS);
+  let visible = null;
+  for (const d of ui.destellos) {
+    const t = ahora - d.inicio;
+    if (t < 0) continue;
+    const entrada = Math.min(1, t / DESTELLO.ENTRADA_MS);
+    const salida = Math.min(1, Math.max(0, (DESTELLO.MS - t) / DESTELLO.SALIDA_MS));
+    const escala = DESTELLO.ESCALA_INICIAL + (1 - DESTELLO.ESCALA_INICIAL) * (1 - (1 - entrada) ** 3);
+    const lado = d.imagen.lado * escala;
+    const c = centroDestello(d.radio);
+    ctx.globalAlpha = Math.min(entrada, salida);
+    ctx.drawImage(d.imagen.lienzo, c.x - lado / 2, c.y - lado / 2, lado, lado);
+    pintarDestellos.sucio = true;
+    visible = { niveles: d.niveles, final: d.final, x: Math.round(c.x), y: Math.round(c.y), r: Math.round(radioVisible(d.radio)) };
+  }
+  ctx.globalAlpha = 1;
+  if (visible) lienzoDestello.dataset.destello = JSON.stringify(visible);
+  else delete lienzoDestello.dataset.destello;
 }
 
 function danarJefe(dano) {
@@ -1422,40 +1475,43 @@ function terminarTrazoJefe(puntos) {
   }
   ui.jefe.trazos = trazos;
   const copia = copiaStats();
-  const puntaje = puntajeTrazoJefe(c);
-  const dano = danoTrazoJefe(puntaje, estado.mejoras[TORRE_DE_TRAZO[c.tipo]]);
+  const presiones = PRESION.has(puntos[0]) ? puntos.map((p) => PRESION.get(p)) : null;
+  const ataque = calificarAtaque(c, puntos, esc, clas, presiones);
+  ui.jefe.ataques = [...ui.jefe.ataques, ataque];
+  const dano = danoAtaqueJefe(ataque.niveles, estado.mejoras[TORRE_DE_TRAZO[c.tipo]]);
   const golpe = danarJefe(dano);
+  const destello = lanzarDestello(ataque, 0);
   if (c.tipo === TIPO_TRAZO_JEFE.ELIPSE && c.elipse) { registrarTrazo(estado, TECNICA.ELIPSE, c.elipse, new Date()); persistir(); }
-  apilarDeshacer({ modo: "jefe", dano: golpe.dano, stats: copia });
-  const medida = textoMedidaJefe(c);
+  apilarDeshacer({ modo: "jefe", dano: golpe.dano, stats: copia, destello });
   const lectura = $("#lectura");
-  lectura.classList.remove("puntos");
+  lectura.classList.add("puntos");
   lectura.replaceChildren(
-    chip(NOMBRE_TRAZO_JEFE[c.tipo], `${Math.round(puntaje * 100)}%`, puntaje >= 0.7 ? "bien" : puntaje < 0.4 ? "mal" : ""),
-    ...(medida ? [chip(c.tipo === TIPO_TRAZO_JEFE.ELIPSE ? "Elipse" : "Error", medida)] : []),
-    ...(c.tipo === TIPO_TRAZO_JEFE.ELIPSE && c.elipse ? [chip("Cierre", `${fmt(c.elipse.cierre_pct)}%`), chip("Temblor", `${fmt(c.elipse.temblor_deg)}°`)] : []),
-    chip(golpe.dano > 0 ? "Daño" : "Sin", golpe.dano > 0 ? String(golpe.dano) : "daño", golpe.dano > 0 ? "dano" : "mal"),
+    chip(NOMBRE_TRAZO_JEFE[c.tipo], golpe.dano > 0 ? `−${golpe.dano}` : "sin daño", golpe.dano > 0 ? "dano" : "mal"),
+    ...chipsAtaque(ataque),
   );
-  const color = golpe.dano === 0 ? COLOR.MAL : colorPuntaje(puntaje);
-  marcaJefe(fin, golpe.dano > 0 ? `−${golpe.dano}` : "fallo", `${NOMBRE_TRAZO_JEFE[c.tipo]} ${Math.round(puntaje * 100)}%${medida ? ` · ${medida}` : ""}`, color);
+  const color = golpe.dano === 0 ? COLOR.MAL : colorPuntaje(multiplicadorDeNiveles(ataque.niveles));
+  marcaJefe(fin, golpe.dano > 0 ? `−${golpe.dano}` : "fallo", `${NOMBRE_TRAZO_JEFE[c.tipo]} · ${resumenNiveles(ataque)}`, color);
   const falta = faltantesJefe(clas);
   if (!golpe.vencido && Object.values(falta).every((v) => v === 0)) {
     vaciarDeshacer();
     const res = evaluarJefe(trazos, esc.fuga, ui.jefe.nivel);
     const rotos = res.puntos.filter((p) => p.roto).length;
-    const bonus = danarJefe(danoPuntosDebiles(rotos));
+    const final = combinarAtaques(ui.jefe.ataques);
+    const danoFinal = danoAtaqueFinal(final.niveles);
+    const bonus = danarJefe(danoFinal + danoPuntosDebiles(rotos));
+    lanzarDestello(final, DESTELLO.RETRASO_FINAL_MS);
     ui.jefe.resultado = res;
     ui.oleada.jefe.rondas += 1;
-    pad.dataset.resultado = JSON.stringify({ rotos, bonus: bonus.dano, puntos: res.puntos.map((p) => ({ id: p.id, roto: p.roto, valor: p.valor, meta: p.meta })) });
+    pad.dataset.resultado = JSON.stringify({ rotos, bonus: bonus.dano, final: { niveles: final.niveles, valores: final.valores, dano: danoFinal }, puntos: res.puntos.map((p) => ({ id: p.id, roto: p.roto, valor: p.valor, meta: p.meta })) });
     lectura.replaceChildren(...res.puntos.map(chipPunto));
-    lectura.classList.add("puntos");
-    marcaJefe(fin, `−${golpe.dano + bonus.dano}`, `Trazo −${golpe.dano} · ${rotos}/${res.puntos.length} puntos débiles −${bonus.dano}`, rotos ? COLOR.BIEN : COLOR.TINTA);
+    marcaJefe(fin, `−${golpe.dano + bonus.dano}`, `Ataque final · ${resumenNiveles(final)} · ${rotos}/${res.puntos.length} puntos débiles`, rotos ? COLOR.BIEN : COLOR.TINTA);
     if (bonus.vencido) vencerJefe();
     else {
       ui.jefe.bloqueoHasta = performance.now() + BATALLA_JEFE.RONDA_MS;
       ui.jefe.rondaTimer = setTimeout(() => {
         if (!ui.jefe.activo || ui.jefe.vencido) return;
         ui.jefe.trazos = [];
+        ui.jefe.ataques = [];
         ui.jefe.resultado = null;
         delete pad.dataset.resultado;
         pintarPista();
@@ -1570,6 +1626,10 @@ function pintarAjustes() {
       h("p", { class: "tenue", text: "Repasa cómo se ataca dibujando, cómo se mide cada trazo y el jefe." }),
       h("button", { class: "btn primary ancho", type: "button", id: "repetir-tutorial", onclick: () => { cambiarPantalla(PANTALLA.JUGAR); abrirTutorial(); }, text: "Repetir tutorial" })),
     h("div", { class: "card" },
+      h("h2", { text: "Destello de ataque" }),
+      h("p", { class: "tenue", text: "Qué significan los anillos y colores de cada ataque al jefe." }),
+      h("button", { class: "btn ancho", type: "button", id: "ver-leyenda", onclick: abrirLeyenda, text: "Ver leyenda" })),
+    h("div", { class: "card" },
       h("h2", { text: "Progreso" }),
       h("p", { class: "tenue", text: "Se guarda solo en este navegador." }),
       h("button", { class: "btn peligro ancho", type: "button", onclick: reiniciar, text: "Borrar mi progreso" })),
@@ -1600,11 +1660,34 @@ for (const b of document.querySelectorAll(".tabbar button")) {
   b.addEventListener("click", () => { if (!tutorial.activo()) cambiarPantalla(b.dataset.tab); });
 }
 
+const DESCRIPCION_NIVEL = Object.freeze(["brasa apagada", "rojo encendido", "ámbar caliente", "blanco brillante"]);
+const LUGAR_ANILLO = Object.freeze(["centro", "", "", "", "borde"]);
+
+$("#leyenda-dims").replaceChildren(...DIMENSIONES.map((d, i) => h("li", {}, h("span", { class: "n", text: String(i + 1) }), d.nombre, ...(LUGAR_ANILLO[i] ? [h("small", { text: LUGAR_ANILLO[i] })] : []))));
+$("#leyenda-niveles").replaceChildren(...NIVEL_ATAQUE.NOMBRES.map((nombre, i) => h("li", { "data-nivel": String(i) },
+  h("span", { class: `muestra${i === NIVEL_ATAQUE.PERFECTO ? " brilla" : ""}`, style: `background:${NIVEL_ATAQUE.COLORES[i]}` }),
+  h("span", {}, h("b", { text: nombre }), h("small", { text: `${NIVEL_ATAQUE.COLORES[i]} · ${DESCRIPCION_NIVEL[i]}` })))));
+
+function abrirLeyenda() {
+  $("#leyenda").hidden = false;
+  $("#leyenda-cerrar").focus();
+}
+
+function cerrarLeyenda() {
+  $("#leyenda").hidden = true;
+}
+
+$("#btn-leyenda").addEventListener("click", abrirLeyenda);
+$("#leyenda-cerrar").addEventListener("click", cerrarLeyenda);
+$("#leyenda-velo").addEventListener("click", cerrarLeyenda);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#leyenda").hidden) cerrarLeyenda(); });
+
 $("#btn-oleada").addEventListener("click", iniciarOleada);
 $("#btn-demo").addEventListener("click", arrancarDemo);
 $("#btn-borrar").addEventListener("click", () => {
   if (!ui.jefe.activo || ui.jefe.vencido || performance.now() < ui.jefe.bloqueoHasta) return;
   ui.jefe.trazos = [];
+  ui.jefe.ataques = [];
   ui.marca = null;
   vaciarDeshacer();
   pintarPista();
@@ -1651,10 +1734,11 @@ function redimensionar() {
   const antesW = tamPad.w;
   const antesH = tamPad.h;
   tamCampo = ajustarCanvas(campo);
+  tamDestello = ajustarCanvas(lienzoDestello);
   tamPad = ajustarCanvas(pad);
   const cambio = antesW !== tamPad.w || antesH !== tamPad.h;
   if (ui.jefe.activo) {
-    if (cambio || !ui.jefe.escena) { ui.jefe.trazos = []; vaciarDeshacer(); nuevaEscenaJefe(); pintarPista(); }
+    if (cambio || !ui.jefe.escena) { ui.jefe.trazos = []; ui.jefe.ataques = []; vaciarDeshacer(); nuevaEscenaJefe(); pintarPista(); }
     pintarPad();
   } else if (!ui.ejercicio || cambio) { ui.feedback = null; nuevoEjercicio(true); }
   else pintarPad();

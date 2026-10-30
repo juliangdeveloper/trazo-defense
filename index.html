@@ -16,8 +16,8 @@
   <title>Trazo Defense</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
-  <link rel="manifest" href="manifest.json?v=0.1.11">
-  <link rel="stylesheet" href="css/styles.css?v=0.1.11">
+  <link rel="manifest" href="manifest.json?v=0.1.12">
+  <link rel="stylesheet" href="css/styles.css?v=0.1.12">
 </head>
 <body>
   <header class="bar">
@@ -52,6 +52,10 @@
           </div>
         </div>
         <div class="torres" id="torres" role="group" aria-label="Torres y mejoras"></div>
+        <canvas class="destello-capa" id="destello" aria-hidden="true"></canvas>
+        <button class="leyenda-btn" type="button" id="btn-leyenda" aria-label="Leyenda del destello de ataque" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/></svg>
+        </button>
       </div>
       <div class="lectura" id="lectura" aria-live="polite"></div>
     </section>
@@ -93,7 +97,39 @@
     </div>
   </div>
 
+  <div class="leyenda" id="leyenda" hidden>
+    <div class="leyenda-velo" id="leyenda-velo"></div>
+    <div class="leyenda-card" role="dialog" aria-modal="true" aria-labelledby="leyenda-titulo">
+      <h2 id="leyenda-titulo">Destello de ataque</h2>
+      <p class="tenue">Sale con cada ataque al jefe: cada línea, la elipse y el cubo cerrado.</p>
+      <h3>Anillos, del centro hacia afuera</h3>
+      <div class="leyenda-anillos">
+        <svg class="leyenda-diana" viewBox="0 0 120 120" aria-hidden="true">
+          <circle cx="60" cy="60" r="58" fill="#b2aea8"/>
+          <circle cx="60" cy="60" r="47" fill="#c4c0ba"/>
+          <circle cx="60" cy="60" r="36" fill="#d6d3cd"/>
+          <circle cx="60" cy="60" r="25" fill="#e8e6e2"/>
+          <circle cx="60" cy="60" r="14" fill="#fafafa"/>
+          <g class="leyenda-num">
+            <circle cx="60" cy="60" r="5"/><text x="60" y="62.6">1</text>
+            <circle cx="79.5" cy="60" r="5"/><text x="79.5" y="62.6">2</text>
+            <circle cx="90.5" cy="60" r="5"/><text x="90.5" y="62.6">3</text>
+            <circle cx="101.5" cy="60" r="5"/><text x="101.5" y="62.6">4</text>
+            <circle cx="112.5" cy="60" r="5"/><text x="112.5" y="62.6">5</text>
+          </g>
+        </svg>
+        <ol class="leyenda-dims" id="leyenda-dims"></ol>
+      </div>
+      <h3>Color = calificación</h3>
+      <div class="leyenda-barra" aria-hidden="true"></div>
+      <div class="leyenda-extremos" aria-hidden="true"><span>frío</span><span>incandescente</span></div>
+      <ul class="leyenda-niveles" id="leyenda-niveles"></ul>
+      <p class="leyenda-pie">Todo blanco = perfecto en todo. Todo negro = todo mal.</p>
+      <button class="btn primary ancho" type="button" id="leyenda-cerrar">Entendido</button>
+    </div>
+  </div>
+
   <p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
-  <script type="module" src="js/app.js?v=0.1.11"></script>
+  <script type="module" src="js/app.js?v=0.1.12"></script>
 </body>
 </html>

@@ -110,6 +110,23 @@ button { font: inherit; color: inherit; }
   position: relative;
 }
 .campo-wrap canvas, .pad-wrap canvas { display: block; width: 100%; height: 100%; }
+.campo-wrap .destello-capa { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.leyenda-btn {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  z-index: 4;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--linea);
+  background: rgba(255, 253, 248, 0.92);
+  color: var(--tinta);
+  cursor: pointer;
+}
+.leyenda-btn svg { width: 24px; height: 24px; }
 .campo-wrap.lento { box-shadow: inset 0 0 0 2px rgba(75, 91, 214, 0.35); }
 
 #pad-wrap {
@@ -353,6 +370,35 @@ button { font: inherit; color: inherit; }
 .tuto-paso { font-size: 12px !important; color: var(--tenue); font-weight: 600; }
 .tuto-acciones { display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; }
 .tuto-foco { position: relative; z-index: 51; box-shadow: 0 0 0 3px var(--acento), 0 0 0 9999px rgba(0, 0, 0, 0); border-radius: 12px; }
+
+.leyenda { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: calc(12px + var(--top)) calc(12px + var(--right)) calc(12px + var(--bottom)) calc(12px + var(--left)); }
+.leyenda[hidden] { display: none; }
+.leyenda-velo { position: absolute; inset: 0; background: rgba(31, 29, 43, 0.45); }
+.leyenda-card { position: relative; width: 100%; max-width: 440px; max-height: 100%; overflow: hidden; background: var(--hoja); border-radius: 16px; padding: 14px 16px 12px; box-shadow: 0 16px 48px rgba(31, 29, 43, 0.25); }
+.leyenda-card h2 { margin: 0 0 2px; font-size: 19px; letter-spacing: -0.01em; }
+.leyenda-card > p { margin: 0 0 8px; font-size: 13px; line-height: 1.35; }
+.leyenda-card h3 { margin: 8px 0 6px; font-size: 14px; }
+.leyenda-anillos { display: flex; align-items: center; gap: 14px; }
+.leyenda-diana { flex: 0 0 104px; width: 104px; height: 104px; }
+.leyenda-num circle { fill: var(--tinta); }
+.leyenda-num text { fill: #fff; font-size: 7.5px; font-weight: 800; text-anchor: middle; font-family: -apple-system, system-ui, sans-serif; }
+.leyenda-dims { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; font-size: 14px; font-weight: 700; }
+.leyenda-dims li { display: flex; align-items: baseline; gap: 6px; }
+.leyenda-dims .n { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 999px; background: var(--tinta); color: #fff; font-size: 11px; font-weight: 800; flex: 0 0 auto; align-self: center; }
+.leyenda-dims small { color: var(--tenue); font-weight: 500; font-size: 12px; }
+.leyenda-barra { height: 16px; border-radius: 6px; border: 1px solid #c8c0b2; background: linear-gradient(to right, #1b1b1f, #d2452a 33.3%, #f2b33d 66.6%, #ffffff); }
+.leyenda-extremos { display: flex; justify-content: space-between; font-size: 11px; color: var(--tenue); margin: 2px 0 6px; }
+.leyenda-niveles { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+.leyenda-niveles li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.leyenda-niveles .muestra { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 999px; border: 1.5px solid #c8c0b2; }
+.leyenda-niveles .muestra.brilla { box-shadow: 0 0 10px 3px rgba(242, 179, 61, 0.7); }
+.leyenda-niveles b { display: block; font-size: 14px; }
+.leyenda-niveles small { display: block; font-size: 11px; color: var(--tenue); white-space: nowrap; }
+.leyenda-pie { margin: 8px 0 0; font-size: 13px; font-weight: 600; }
+.lectura .dato.nivel-0 { border-color: #1b1b1f; }
+.lectura .dato.nivel-1 { border-color: #d2452a; }
+.lectura .dato.nivel-2 { border-color: #f2b33d; }
+.lectura .dato.nivel-3 { border-color: #f2b33d; box-shadow: 0 0 6px rgba(242, 179, 61, 0.55); }
 
 .toast {
   position: fixed;

@@ -1,5 +1,5 @@
 export const APP_ID = "trazo-defense";
-export const APP_VERSION = "0.1.11";
+export const APP_VERSION = "0.1.12";
 export const SAVE_KEY = "trazo-defense.save";
 export const SAVE_VERSION = 1;
 export const CACHE_PREFIX = "trazo-defense-";
@@ -81,9 +81,7 @@ export const JEFE = Object.freeze({
   elipseRectitudMinPct: 12,
   elipseBarridoMinDeg: 270,
   vida: 300,
-  danoTrazo: 20,
   danoPuntoDebil: 20,
-  toleranciaDeg: 8,
   recompensaTinta: 30,
   golpeMs: 220,
   puntosDebiles: Object.freeze([
@@ -93,6 +91,68 @@ export const JEFE = Object.freeze({
     Object.freeze({ id: PUNTO_DEBIL.SEGURIDAD, nombre: "Seguridad", corto: "Seguridad", texto: "trazos seguros:", media: false, unidad: "%", base: 60, paso: 5, limite: 85, compara: COMPARA.MAYOR_O_IGUAL }),
     Object.freeze({ id: PUNTO_DEBIL.ELIPSE, nombre: "Elipse", corto: "Elipse", texto: "la elipse en la cara frontal puntúa", media: false, unidad: "%", base: 55, paso: 5, limite: 80, compara: COMPARA.MAYOR_O_IGUAL }),
   ]),
+});
+
+export const DIMENSION = Object.freeze({
+  PRECISION: "precision",
+  RECTITUD: "rectitud",
+  SEGURIDAD: "seguridad",
+  PROPORCION: "proporcion",
+  PRESION: "presion",
+});
+
+export const DIMENSIONES = Object.freeze([
+  Object.freeze({ id: DIMENSION.PRECISION, nombre: "Precisión", corto: "Prec." }),
+  Object.freeze({ id: DIMENSION.RECTITUD, nombre: "Rectitud", corto: "Rect." }),
+  Object.freeze({ id: DIMENSION.SEGURIDAD, nombre: "Seguridad", corto: "Seg." }),
+  Object.freeze({ id: DIMENSION.PROPORCION, nombre: "Proporción", corto: "Prop." }),
+  Object.freeze({ id: DIMENSION.PRESION, nombre: "Presión", corto: "Pres." }),
+]);
+
+export const NIVEL_ATAQUE = Object.freeze({
+  DEBIL: 0,
+  BIEN: 1,
+  FUERTE: 2,
+  PERFECTO: 3,
+  NOMBRES: Object.freeze(["Débil", "Bien", "Fuerte", "Perfecto"]),
+  COLORES: Object.freeze(["#1b1b1f", "#d2452a", "#f2b33d", "#ffffff"]),
+  CORTES: Object.freeze([0.45, 0.7, 0.9]),
+  MULTIPLICADOR: Object.freeze([0.1, 0.45, 0.75, 1]),
+  CALOR: Object.freeze([0, 0.45, 0.8, 1]),
+});
+
+export const ATAQUE = Object.freeze({
+  DANO_TRAZO: 20,
+  DANO_FINAL: 20,
+  PRECISION_HORIZONTE_MAX: 0.3,
+  PRECISION_FUGA_MAX_DEG: 10,
+  PRECISION_FRONTAL_MAX: 0.3,
+  PRECISION_ELIPSE_MAX: 0.25,
+  RECTITUD_MAX_PCT: 8,
+  RECTITUD_ELIPSE_TEMBLOR_MAX_DEG: 12,
+  SEGURIDAD_VARIACION_MAX: 0.8,
+  SEGURIDAD_VENTANA_MS: 30,
+  SEGURIDAD_PAUSA_PX_MS: 0.05,
+  SEGURIDAD_PENALIZACION_PAUSA: 0.6,
+  PROPORCION_EJE_MAX_DEG: 6,
+  PROPORCION_LADO_MAX: 0.5,
+  PROPORCION_FONDO_BANDA: 0.1,
+  PROPORCION_FONDO_CAIDA: 0.4,
+  PROPORCION_ELIPSE_AJUSTE_MAX_PCT: 15,
+  PRESION_VARIACION_MAX: 0.35,
+  PRESION_VELOCIDAD_REF_PX_MS: 1.5,
+  RECORTE_EXTREMOS: 0.1,
+});
+
+export const DESTELLO = Object.freeze({
+  RADIO: 40,
+  ESCALA_FINAL: 1.2,
+  MS: 1500,
+  ENTRADA_MS: 160,
+  SALIDA_MS: 450,
+  RETRASO_FINAL_MS: 520,
+  ESCALA_INICIAL: 0.6,
+  DPR_MAX: 3,
 });
 
 export const ESCENA_JEFE = Object.freeze({
@@ -212,13 +272,14 @@ export const FASE_PUNTOS = Object.freeze([
   Object.freeze({ texto: "Campo vertical: los monstruos bajan hacia tu cuaderno y dibujas sobre el campo, entre ellos y la base", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Cámara lenta mientras dibujas y cola con los próximos ejercicios", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Tutorial inicial que se puede repetir", estado: PUNTO_FASE.HECHO }),
+  Object.freeze({ texto: "Contra el jefe cada trazo es un ataque calificado en 5 dimensiones, con destello de anillos y ataque final al cerrar la caja", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Funciona sin conexión, en iPhone 13 mini y en iPad mini", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Calibrar umbrales con trazos reales", estado: PUNTO_FASE.PENDIENTE }),
   Object.freeze({ texto: "Capítulos 2 en adelante: cajas rotadas, texturas y formas orgánicas", estado: PUNTO_FASE.PENDIENTE }),
   Object.freeze({ texto: "Torre de gesto con poses de 30 segundos", estado: PUNTO_FASE.PENDIENTE }),
   Object.freeze({ texto: "Jefes de proporción, valor, composición y color", estado: PUNTO_FASE.PENDIENTE }),
   Object.freeze({ texto: "Preguntas de historia y estilos con repaso espaciado", estado: PUNTO_FASE.PENDIENTE }),
-  Object.freeze({ texto: "Presión del lápiz en la puntuación", estado: PUNTO_FASE.PENDIENTE }),
+  Object.freeze({ texto: "Presión del lápiz en la puntuación de las torres", estado: PUNTO_FASE.PENDIENTE }),
   Object.freeze({ texto: "Sonido y animaciones finales", estado: PUNTO_FASE.PENDIENTE }),
 ]);
 

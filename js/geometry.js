@@ -1,4 +1,4 @@
-import { PUNTAJE, JEFE, PUNTO_DEBIL, COMPARA } from "./config.js";
+import { PUNTAJE, JEFE, PUNTO_DEBIL, COMPARA, ATAQUE, DIMENSION, DIMENSIONES, NIVEL_ATAQUE, ESCENA_JEFE } from "./config.js";
 
 const GRADOS = 180 / Math.PI;
 
@@ -385,15 +385,6 @@ export function clasificarTrazosJefe(trazos, fuga) {
   return salida;
 }
 
-export function puntajeTrazoJefe(c) {
-  if (!c || c.tipo === TIPO_TRAZO_JEFE.DESCARTADO) return 0;
-  if (c.tipo === TIPO_TRAZO_JEFE.ELIPSE) return c.elipse && c.elipse.valido ? c.elipse.puntaje : 0;
-  const base = 0.6 * clamp01(1 - c.error_deg / JEFE.toleranciaDeg)
-    + 0.25 * clamp01(1 - c.rectitud_pct / PUNTAJE.PERSPECTIVA_RECTITUD_MAX_PCT)
-    + 0.15 * (c.seguro ? 1 : 0);
-  return redondear(clamp01(base * factorRepasos(c.repasos)), 3);
-}
-
 export function metaPuntoDebil(punto, nivel) {
   const n = Math.max(1, Math.floor(nivel) || 1);
   const valor = punto.base + punto.paso * (n - 1);
@@ -452,4 +443,142 @@ export function evaluarJefe(trazos, fuga, nivel) {
     return { id: punto.id, nombre: punto.nombre, corto: punto.corto, texto: punto.texto, media: punto.media, unidad: punto.unidad, compara: punto.compara, valor: Number.isFinite(valor) ? redondear(valor, 1) : null, meta: redondear(meta, 1), roto };
   });
   return { listo, falta, clasificados, puntos, vencido: listo && puntos.every((p) => p.roto) };
+}
+
+export function nivelAtaque(valor) {
+  const v = clamp01(valor);
+  let nivel = NIVEL_ATAQUE.DEBIL;
+  NIVEL_ATAQUE.CORTES.forEach((corte, i) => { if (v >= corte) nivel = i + 1; });
+  return nivel;
+}
+
+function recortarExtremos(lista) {
+  const n = Math.floor(lista.length * ATAQUE.RECORTE_EXTREMOS);
+  const medio = lista.slice(n, lista.length - n);
+  return medio.length >= 2 ? medio : lista;
+}
+
+function variacion(lista) {
+  if (lista.length < 2) return 0;
+  const media = promedio(lista);
+  if (!(media > 0)) return 0;
+  const varianza = lista.reduce((s, v) => s + (v - media) * (v - media), 0) / lista.length;
+  return Math.sqrt(varianza) / media;
+}
+
+export function velocidadesPorVentana(puntos) {
+  const salida = [];
+  let inicio = 0;
+  for (let i = 1; i < puntos.length; i++) {
+    const dt = puntos[i].t - puntos[inicio].t;
+    if (!(dt >= ATAQUE.SEGURIDAD_VENTANA_MS)) continue;
+    let largo = 0;
+    for (let k = inicio + 1; k <= i; k++) largo += distancia(puntos[k - 1], puntos[k]);
+    salida.push(largo / dt);
+    inicio = i;
+  }
+  return salida;
+}
+
+export function contarPausas(velocidades) {
+  let pausas = 0;
+  let enPausa = false;
+  for (const v of velocidades) {
+    const lenta = v < ATAQUE.SEGURIDAD_PAUSA_PX_MS;
+    if (lenta && !enPausa) pausas += 1;
+    enPausa = lenta;
+  }
+  return pausas;
+}
+
+function valorSeguridad(puntos, repasos) {
+  const velocidades = recortarExtremos(velocidadesPorVentana(puntos));
+  const constancia = clamp01(1 - variacion(velocidades) / ATAQUE.SEGURIDAD_VARIACION_MAX);
+  const ritmo = puntajeSeguridad(velocidad(puntos));
+  return Math.min(constancia, ritmo) * factorRepasos(repasos) * Math.pow(ATAQUE.SEGURIDAD_PENALIZACION_PAUSA, contarPausas(velocidades));
+}
+
+function valorPresion(puntos, presiones) {
+  const conLapiz = Array.isArray(presiones) && presiones.length === puntos.length && presiones.every((v) => Number.isFinite(v));
+  const lista = conLapiz
+    ? presiones
+    : velocidadesPorVentana(puntos).map((v) => 1 - Math.min(1, v / ATAQUE.PRESION_VELOCIDAD_REF_PX_MS) * 0.5);
+  return { valor: clamp01(1 - variacion(recortarExtremos(lista)) / ATAQUE.PRESION_VARIACION_MAX), lapiz: conLapiz };
+}
+
+function centroide(puntos) {
+  let x = 0;
+  let y = 0;
+  for (const p of puntos) { x += p.x; y += p.y; }
+  return { x: x / puntos.length, y: y / puntos.length };
+}
+
+function valoresLinea(c, puntos, escena, cara) {
+  const { recta, largo } = rectitudPct(puntos);
+  const rectitud = clamp01(1 - c.rectitud_pct / ATAQUE.RECTITUD_MAX_PCT);
+  const eje = clamp01(1 - c.error_deg / ATAQUE.PROPORCION_EJE_MAX_DEG);
+  if (c.tipo === TIPO_TRAZO_JEFE.HORIZONTE) {
+    const d = distanciaARecta(escena.fuga, { x: recta.cx, y: recta.cy }, { x: recta.cx + recta.ux, y: recta.cy + recta.uy });
+    return { precision: clamp01(1 - d / (escena.lado * ATAQUE.PRECISION_HORIZONTE_MAX)), rectitud, proporcion: eje };
+  }
+  if (c.tipo === TIPO_TRAZO_JEFE.FUGANTE) {
+    const inicio = puntos[0];
+    const fin = puntos[puntos.length - 1];
+    const cerca = distancia(inicio, escena.fuga) >= distancia(fin, escena.fuga) ? inicio : fin;
+    const total = distancia(cerca, escena.fuga);
+    const razon = total > 0 ? largo / total : 0;
+    const fuera = Math.max(0, Math.abs(razon - ESCENA_JEFE.FONDO) - ATAQUE.PROPORCION_FONDO_BANDA);
+    return {
+      precision: clamp01(1 - c.error_deg / ATAQUE.PRECISION_FUGA_MAX_DEG),
+      rectitud,
+      proporcion: clamp01(1 - fuera / ATAQUE.PROPORCION_FONDO_CAIDA),
+    };
+  }
+  const desfase = Math.abs((escena.centro.x - recta.cx) * recta.ux + (escena.centro.y - recta.cy) * recta.uy);
+  const precision = largo > 0 ? clamp01(1 - desfase / (largo / 2) / ATAQUE.PRECISION_FRONTAL_MAX) : 0;
+  const referencia = cara ? (c.vertical ? cara.h : cara.w) : escena.lado;
+  const tamano = referencia > 0 ? clamp01(1 - Math.abs(largo - referencia) / referencia / ATAQUE.PROPORCION_LADO_MAX) : 0;
+  return { precision, rectitud, proporcion: (eje + tamano) / 2 };
+}
+
+function valoresElipse(c, puntos, escena) {
+  const r = c.elipse;
+  if (!r || !r.valido) return { precision: 0, rectitud: 0, proporcion: 0 };
+  const cara = c.cara;
+  const centro = cara ? { x: cara.x + cara.w / 2, y: cara.y + cara.h / 2 } : escena.centro;
+  const semieje = cara ? (cara.w + cara.h) / 4 : escena.lado / 2;
+  const desfase = distancia(centroide(puntos), centro);
+  const cobertura = clamp01((r.cobertura_deg - PUNTAJE.ELIPSE_COBERTURA_MIN_DEG) / (PUNTAJE.ELIPSE_COBERTURA_OK_DEG - PUNTAJE.ELIPSE_COBERTURA_MIN_DEG));
+  return {
+    precision: semieje > 0 ? clamp01(1 - desfase / semieje / ATAQUE.PRECISION_ELIPSE_MAX) : 0,
+    rectitud: clamp01(1 - r.temblor_deg / ATAQUE.RECTITUD_ELIPSE_TEMBLOR_MAX_DEG),
+    proporcion: clamp01(1 - r.ajuste_pct / ATAQUE.PROPORCION_ELIPSE_AJUSTE_MAX_PCT) * cobertura,
+  };
+}
+
+export function calificarAtaque(c, puntos, escena, clasificados = [], presiones = null) {
+  if (!c || c.tipo === TIPO_TRAZO_JEFE.DESCARTADO || trazoCorto(puntos)) return null;
+  const esElipse = c.tipo === TIPO_TRAZO_JEFE.ELIPSE;
+  const base = esElipse ? valoresElipse(c, puntos, escena) : valoresLinea(c, puntos, escena, caraFrontal(clasificados));
+  const presion = valorPresion(puntos, presiones);
+  const valores = {
+    [DIMENSION.PRECISION]: base.precision,
+    [DIMENSION.RECTITUD]: base.rectitud,
+    [DIMENSION.SEGURIDAD]: valorSeguridad(puntos, esElipse ? 0 : c.repasos || 0),
+    [DIMENSION.PROPORCION]: base.proporcion,
+    [DIMENSION.PRESION]: presion.valor,
+  };
+  return armarAtaque(valores, c.tipo, presion.lapiz);
+}
+
+function armarAtaque(valores, tipo, lapiz) {
+  const limpios = Object.fromEntries(DIMENSIONES.map((d) => [d.id, redondear(clamp01(valores[d.id]), 3)]));
+  return { tipo, lapiz, valores: limpios, niveles: DIMENSIONES.map((d) => nivelAtaque(limpios[d.id])) };
+}
+
+export function combinarAtaques(ataques) {
+  const lista = ataques.filter(Boolean);
+  if (!lista.length) return null;
+  const valores = Object.fromEntries(DIMENSIONES.map((d) => [d.id, promedio(lista.map((a) => a.valores[d.id]))]));
+  return { ...armarAtaque(valores, "final", lista.some((a) => a.lapiz)), final: true, ataques: lista.length };
 }
