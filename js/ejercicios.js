@@ -106,12 +106,36 @@ export function crearEjercicio(tecnica, w, h, rng = Math.random, arriba = 0) {
   return desplazarEjercicio(ej, reserva);
 }
 
-export function escenaJefe(w, h, arriba = 0) {
+export function azarJefe(rng = Math.random) {
+  return { centroX: rng(), centroY: rng(), fugaY: rng(), lado: rng(), fugaX: rng() };
+}
+
+function posicionesAzar(azar, w, alto, lado) {
+  const m = lado / 2;
+  const borde = ESCENA_JEFE.AZAR_BORDE * w;
+  const cx = m + borde + (w - 2 * (m + borde)) * azar.centroX;
+  const separacion = m + ESCENA_JEFE.AZAR_SEPARACION * w;
+  const [fxMin, fxMax] = ESCENA_JEFE.AZAR_FUGA_X.map((f) => f * w);
+  const derecha = [Math.max(fxMin, cx + separacion), fxMax];
+  const izquierda = [fxMin, Math.min(fxMax, cx - separacion)];
+  const caben = [derecha, izquierda].filter(([a, b]) => b >= a);
+  const rango = caben.length > 1 ? caben[azar.lado < 0.5 ? 0 : 1] : caben[0] || [fxMin, fxMax];
+  const fx = rango[0] + (rango[1] - rango[0]) * azar.fugaX;
+  const fy = ESCENA_JEFE.AZAR_FUGA_Y[0] + (ESCENA_JEFE.AZAR_FUGA_Y[1] - ESCENA_JEFE.AZAR_FUGA_Y[0]) * azar.fugaY;
+  const cy = ESCENA_JEFE.AZAR_CENTRO_Y[0] + (ESCENA_JEFE.AZAR_CENTRO_Y[1] - ESCENA_JEFE.AZAR_CENTRO_Y[0]) * azar.centroY;
+  return { fuga: { x: fx, y: fy * alto }, centro: { x: cx, y: cy * alto } };
+}
+
+export function escenaJefe(w, h, arriba = 0, azar = null) {
   const reserva = Math.max(0, Math.min(arriba, h * ESCENA_JEFE.RESERVA_MAX));
   const alto = h - reserva;
+  const lado = ESCENA_JEFE.LADO * Math.min(w, alto);
+  if (azar) {
+    const p = posicionesAzar(azar, w, alto, lado);
+    return { fuga: { x: p.fuga.x, y: reserva + p.fuga.y }, centro: { x: p.centro.x, y: reserva + p.centro.y }, lado, w, h };
+  }
   const fuga = { x: ESCENA_JEFE.FUGA[0] * w, y: reserva + ESCENA_JEFE.FUGA[1] * alto };
   const centro = { x: ESCENA_JEFE.CENTRO[0] * w, y: reserva + ESCENA_JEFE.CENTRO[1] * alto };
-  const lado = ESCENA_JEFE.LADO * Math.min(w, alto);
   return { fuga, centro, lado, w, h };
 }
 

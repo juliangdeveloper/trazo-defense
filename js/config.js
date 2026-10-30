@@ -1,5 +1,5 @@
 export const APP_ID = "trazo-defense";
-export const APP_VERSION = "0.1.10";
+export const APP_VERSION = "0.1.11";
 export const SAVE_KEY = "trazo-defense.save";
 export const SAVE_VERSION = 1;
 export const CACHE_PREFIX = "trazo-defense-";
@@ -101,7 +101,19 @@ export const ESCENA_JEFE = Object.freeze({
   LADO: 0.36,
   FONDO: 0.45,
   RESERVA_MAX: 0.3,
+  AZAR_FUGA_Y: Object.freeze([0.1, 0.26]),
+  AZAR_CENTRO_Y: Object.freeze([0.6, 0.7]),
+  AZAR_BORDE: 0.06,
+  AZAR_FUGA_X: Object.freeze([0.1, 0.9]),
+  AZAR_SEPARACION: 0.1,
 });
+
+export const PALMA = Object.freeze({
+  CONTACTO_MAX_PX: 50,
+  GRACIA_LAPIZ_MS: 800,
+});
+
+export const DESHACER = Object.freeze({ MAX: 20 });
 
 export const DEMO_JEFE = Object.freeze({
   TRAZO_MS: 420,

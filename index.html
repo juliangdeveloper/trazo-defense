@@ -16,8 +16,8 @@
   <title>Trazo Defense</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
-  <link rel="manifest" href="manifest.json?v=0.1.10">
-  <link rel="stylesheet" href="css/styles.css?v=0.1.10">
+  <link rel="manifest" href="manifest.json?v=0.1.11">
+  <link rel="stylesheet" href="css/styles.css?v=0.1.11">
 </head>
 <body>
   <header class="bar">
@@ -37,6 +37,7 @@
         <p class="hud-estado" id="hud-estado" aria-live="polite">Práctica libre</p>
         <div class="hud-acciones">
           <button class="chip-btn" type="button" id="btn-oleada">Oleada</button>
+          <button class="chip-btn" type="button" id="btn-deshacer" disabled>Deshacer</button>
           <button class="chip-btn" type="button" id="btn-borrar" hidden>Borrar</button>
           <button class="chip-btn demo-btn" type="button" id="btn-demo" hidden>Ver demo</button>
         </div>
@@ -93,6 +94,6 @@
   </div>
 
   <p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
-  <script type="module" src="js/app.js?v=0.1.10"></script>
+  <script type="module" src="js/app.js?v=0.1.11"></script>
 </body>
 </html>

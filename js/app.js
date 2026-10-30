@@ -1,7 +1,7 @@
 import {
   APP_ID, APP_VERSION, SAVE_KEY, TECNICA, TECNICAS, TORRE, METRICA_PRINCIPAL, CAMINO, PUNTAJE,
   JEFE, COMPARA, PANTALLA, MODO, FASE_PUNTOS, PUNTO_FASE, FASES_NOMBRE, ESTADOS_NOMBRE, TIPOS_NOMBRE, TOTAL_FASES, OLEADA, MEJORA, CAMARA_LENTA, ZONA_DIBUJO, COLA,
-  DEMO_JEFE, BATALLA_JEFE,
+  DEMO_JEFE, BATALLA_JEFE, PALMA, DESHACER,
 } from "./config.js";
 import { PROYECTO, FASE, metaProyecto, metaUpdate, metaRead, crearEscritor } from "./meta.js";
 import { evaluarLinea, evaluarElipse, evaluarFugante, asignarArista, resumenCubo, evaluarJefe, clasificarTrazosJefe, faltantesJefe, cuentaJefe, puntajeTrazoJefe, CUPO_JEFE, TIPO_TRAZO_JEFE } from "./geometry.js";
@@ -10,8 +10,9 @@ import {
   tecnicaMasDebil, siguienteMejora, progresoTinta, subirConTinta, completarSesion, registrarOleada, registrarJefe, curva, statsMeta, logrosDe,
 } from "./progress.js";
 import { crearOleada, actualizarOleada, objetivoPrincipal, elegirObjetivo, puntoEnCamino, danoDeTrazo, atacar, tipoMonstruo, efectoMejora, proximasTecnicas, danoTrazoJefe, danoPuntosDebiles, golpearJefe, cobrarTinta } from "./game.js";
-import { crearEjercicio, escenaJefe, trazosDemoJefe, aristasCubo } from "./ejercicios.js";
+import { crearEjercicio, escenaJefe, azarJefe, trazosDemoJefe, aristasCubo } from "./ejercicios.js";
 import { crearTutorial, ACCION_TUTORIAL } from "./tutorial.js";
+import { getStroke } from "./vendor/perfect-freehand/index.mjs";
 
 const COLOR = Object.freeze({
   TINTA: "#1f1d2b",
@@ -40,6 +41,9 @@ const DT_MAX_MS = 50;
 const CURVA_DIAS = 30;
 const CAMPO_BASE = Object.freeze({ W: 350, H: 480, ESCALA_MAX: 1.8 });
 const AVISO_MEJORA_MS = 1600;
+const TRAZO_LIBRE = Object.freeze({ ANCHO: 3, ADELGAZAR: 0.6, SUAVIZAR: 0.5, ESTABILIZAR: 0.2, PRESION_FIJA: 0.5, PRESION_MIN: 0.05, PUNTOS_MIN: 2 });
+const PRESION = new WeakMap();
+const CAMPOS_DESHACER = Object.freeze(["recientes", "intentos", "historial", "contadores"]);
 
 function escalaCampo() {
   return Math.min(CAMPO_BASE.ESCALA_MAX, Math.max(1, Math.min(tamCampo.w / CAMPO_BASE.W, tamCampo.h / CAMPO_BASE.H)));
@@ -87,11 +91,13 @@ const ui = {
   marca: null,
   avisos: {},
   demo: null,
+  deshacer: [],
+  timerSiguiente: 0,
   jefe: jefeVacio(),
 };
 
 function jefeVacio() {
-  return { activo: false, trazos: [], nivel: 1, escena: null, resultado: null, bloqueoHasta: 0, vencido: false, rondaTimer: 0 };
+  return { activo: false, trazos: [], nivel: 1, escena: null, azar: null, resultado: null, bloqueoHasta: 0, vencido: false, rondaTimer: 0 };
 }
 
 function toast(texto) {
@@ -190,6 +196,7 @@ function seguirMonstruo() {
 function nuevoEjercicio(forzar = false) {
   if (ui.jefe.activo) return;
   if (ui.trazo || (!forzar && cuboEnCurso())) return;
+  if (forzar) vaciarDeshacer();
   seguirMonstruo();
   ui.ejercicio = null;
   pintarPista();
@@ -278,6 +285,34 @@ function trazar(ctx, puntos, color, ancho) {
   ctx.stroke();
 }
 
+function presionDe(p, conLapiz) {
+  return conLapiz && PRESION.has(p) ? PRESION.get(p) : TRAZO_LIBRE.PRESION_FIJA;
+}
+
+function trazarLibre(ctx, puntos, color, terminado = true) {
+  if (!puntos || puntos.length < TRAZO_LIBRE.PUNTOS_MIN) return;
+  const conLapiz = PRESION.has(puntos[0]);
+  const contorno = getStroke(puntos.map((p) => [p.x, p.y, presionDe(p, conLapiz)]), {
+    size: TRAZO_LIBRE.ANCHO,
+    thinning: TRAZO_LIBRE.ADELGAZAR,
+    smoothing: TRAZO_LIBRE.SUAVIZAR,
+    streamline: TRAZO_LIBRE.ESTABILIZAR,
+    simulatePressure: false,
+    last: terminado,
+  });
+  if (contorno.length < 3) return;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(contorno[0][0], contorno[0][1]);
+  for (let i = 0; i < contorno.length; i++) {
+    const [x, y] = contorno[i];
+    const [nx, ny] = contorno[(i + 1) % contorno.length];
+    ctx.quadraticCurveTo(x, y, (x + nx) / 2, (y + ny) / 2);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
 function pintarEjercicio(ctx, ej, mostrarIdeal) {
   if (!ej) return;
   if (ej.tecnica === TECNICA.LINEA) {
@@ -349,29 +384,64 @@ function pintarCubo(ctx, ej, mostrarIdeal) {
     punto(ctx, a.desde, 4.5, COLOR.TINTA);
     punto(ctx, a.hasta, 4, COLOR.TINTA, false);
   });
-  for (const x of ej.hechos) trazar(ctx, x.puntos, colorPuntaje(x.r.puntaje), 3);
+  for (const x of ej.hechos) trazarLibre(ctx, x.puntos, colorPuntaje(x.r.puntaje));
   punto(ctx, ej.fuga, 12, "rgba(192,69,58,0.14)");
   punto(ctx, ej.fuga, 5, COLOR.MAL);
 }
 
-function pintarPad() {
-  const { ctx, w, h: alto } = tamPad;
-  ctx.clearRect(0, 0, w, alto);
+const capa = document.createElement("canvas");
+const capaCtx = capa.getContext("2d");
+let capaFirma = null;
+
+function firmaCapa() {
+  const ej = ui.ejercicio;
+  return [pad.width, pad.height, tamPad.w, tamPad.h, ui.jefe.activo, ui.jefe.escena, ui.jefe.trazos, ui.jefe.trazos.length, ui.feedback, ej, ej && ej.hechos ? ej.hechos.length : 0];
+}
+
+function mismaFirma(a, b) {
+  return Boolean(a && b) && a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+function pintarCapa() {
+  const { w, h: alto } = tamPad;
+  if (capa.width !== pad.width || capa.height !== pad.height) { capa.width = pad.width; capa.height = pad.height; }
+  const ctx = capaCtx;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, capa.width, capa.height);
+  ctx.setTransform(pad.width / w, 0, 0, pad.height / alto, 0, 0);
   ctx.fillStyle = "rgba(255,253,248,0.56)";
   ctx.fillRect(0, 0, w, alto);
   ctx.fillStyle = "rgba(31,29,43,0.12)";
   for (let x = 16; x < w; x += 24) for (let y = 16; y < alto; y += 24) ctx.fillRect(x, y, 1.2, 1.2);
   const fb = ui.feedback;
   if (ui.jefe.activo) {
-    pintarEscenaJefe(ctx);
+    pintarCapaJefe(ctx);
   } else if (fb) {
     pintarEjercicio(ctx, fb.ejercicio, true);
-    trazar(ctx, fb.trazo, fb.color, 3);
+    trazarLibre(ctx, fb.trazo, fb.color);
   } else {
     pintarEjercicio(ctx, ui.ejercicio, false);
-    if (ui.trazo) trazar(ctx, ui.trazo, COLOR.TINTA, 3);
   }
+  capaFirma = firmaCapa();
+}
+
+function componerPad() {
+  const { ctx, w, h: alto } = tamPad;
+  if (!mismaFirma(capaFirma, firmaCapa())) pintarCapa();
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, pad.width, pad.height);
+  ctx.drawImage(capa, 0, 0);
+  ctx.restore();
+  if (ui.jefe.activo) pintarVivoJefe(ctx);
+  else if (!ui.feedback && ui.trazo) trazarLibre(ctx, ui.trazo, COLOR.TINTA, false);
   pintarMarca(ctx, w, alto);
+}
+
+function pintarPad() {
+  capaFirma = null;
+  componerPad();
+  pintarDeshacer();
 }
 
 function pintarMarca(ctx, w, alto) {
@@ -542,10 +612,13 @@ function terminarTrazoCubo(ej, puntos) {
     pintarHud();
     return;
   }
+  const copia = copiaStats();
   ej.hechos.push({ puntos, arista: indice, r });
   pad.dataset.ejercicio = JSON.stringify(ej);
   if (!enTutorial) { registrarTrazo(estado, ej.tecnica, r, new Date()); persistir(); }
   const n = ej.hechos.length;
+  if (enTutorial) vaciarDeshacer();
+  else if (n < PUNTAJE.CUBO_LINEAS) apilarDeshacer({ modo: "practica", ej, stats: copia });
   if (n < PUNTAJE.CUBO_LINEAS) {
     ui.marca = { x: fin.x, y: fin.y, grande: `${n}/${PUNTAJE.CUBO_LINEAS}`, extra: "", chico: `Convergencia ${fmt(r.desvio_deg)}° · ${Math.round(r.puntaje * 100)}%`, color: colorPuntaje(r.puntaje), inicio: performance.now() };
     pintarLectura({ ...r, linea: n }, null);
@@ -559,6 +632,8 @@ function terminarTrazoCubo(ej, puntos) {
   let dano = null;
   let golpes = 0;
   if (!enTutorial && enOleada()) ({ dano, golpes } = golpear(ej.tecnica, total.puntaje));
+  if (!enTutorial && golpes === 0 && !(enOleada() && dano > 0)) apilarDeshacer({ modo: "practica", ej, stats: copia });
+  else vaciarDeshacer();
   if (!enTutorial) pintarTorres();
   ui.objetivoBloqueado = null;
   crearMarca(total, dano, golpes, fin, ej.tecnica);
@@ -567,7 +642,7 @@ function terminarTrazoCubo(ej, puntos) {
   ui.feedback = { ejercicio: ej, trazo: null, color: colorPuntaje(total.puntaje) };
   ui.bloqueoHasta = performance.now() + FEEDBACK_MS * 1.5;
   pintarPad();
-  setTimeout(siguienteEjercicio, FEEDBACK_MS * 1.5);
+  ui.timerSiguiente = setTimeout(siguienteEjercicio, FEEDBACK_MS * 1.5);
   pintarHud();
 }
 
@@ -590,11 +665,14 @@ function terminarTrazo(puntos) {
   let golpes = 0;
   const enTutorial = tutorial.activo();
   if (r.valido && !enTutorial) {
+    const copia = copiaStats();
     registrarTrazo(estado, ej.tecnica, r, new Date());
     if (enOleada()) ({ dano, golpes } = golpear(ej.tecnica, r.puntaje));
+    if (golpes === 0 && !(enOleada() && dano > 0)) apilarDeshacer({ modo: "practica", ej, stats: copia });
+    else vaciarDeshacer();
     persistir();
     pintarTorres();
-  }
+  } else if (r.valido) vaciarDeshacer();
   ui.objetivoBloqueado = null;
   crearMarca(r, dano, golpes, puntos[puntos.length - 1], ej.tecnica);
   pintarLectura(r, dano);
@@ -602,7 +680,7 @@ function terminarTrazo(puntos) {
   ui.feedback = r.valido ? { ejercicio: ej, trazo: puntos, color: colorPuntaje(r.puntaje) } : null;
   ui.bloqueoHasta = performance.now() + (r.valido ? FEEDBACK_MS : 0);
   pintarPad();
-  if (r.valido) setTimeout(siguienteEjercicio, FEEDBACK_MS);
+  if (r.valido) ui.timerSiguiente = setTimeout(siguienteEjercicio, FEEDBACK_MS);
   if (ui.redimPendiente) { ui.redimPendiente = false; redimensionar(); }
   pintarHud();
 }
@@ -614,28 +692,51 @@ function siguienteEjercicio() {
   if (typeof pad.animate === "function") pad.animate([{ opacity: 0.15 }, { opacity: 1 }], { duration: TRANSICION_MS, easing: "ease-out" });
 }
 
+function esPalma(e) {
+  return e.pointerType === "touch" && (e.width > PALMA.CONTACTO_MAX_PX || e.height > PALMA.CONTACTO_MAX_PX);
+}
+
 function conectarLienzo(canvas, { puede, empezar, mover, terminar }) {
   let activo = null;
+  let tipoActivo = null;
+  let lapizHasta = -Infinity;
   let rect = null;
-  const leer = (e) => ({ x: e.clientX - rect.left, y: e.clientY - rect.top, t: e.timeStamp });
+  const lapizCerca = (e) => tipoActivo === "pen" || e.timeStamp < lapizHasta;
+  const leer = (e) => {
+    const p = { x: e.clientX - rect.left, y: e.clientY - rect.top, t: e.timeStamp };
+    if (e.pointerType === "pen") PRESION.set(p, Math.max(TRAZO_LIBRE.PRESION_MIN, e.pressure || 0));
+    return p;
+  };
+  const cortar = () => {
+    activo = null;
+    tipoActivo = null;
+    terminar(true);
+  };
   canvas.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "touch" && (esPalma(e) || lapizCerca(e))) { e.preventDefault(); return; }
+    if (e.pointerType === "pen" && activo !== null && tipoActivo !== "pen") cortar();
     if (activo !== null || !puede()) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
     activo = e.pointerId;
+    tipoActivo = e.pointerType;
     rect = canvas.getBoundingClientRect();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { activo = e.pointerId; }
     empezar(leer(e));
   });
   canvas.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "pen") lapizHasta = e.timeStamp + PALMA.GRACIA_LAPIZ_MS;
     if (e.pointerId !== activo) return;
     e.preventDefault();
+    if (esPalma(e)) { cortar(); return; }
     const lista = typeof e.getCoalescedEvents === "function" ? e.getCoalescedEvents() : [];
-    for (const ev of lista.length ? lista : [e]) mover(leer(ev));
+    mover((lista.length ? lista : [e]).map(leer));
   });
   const fin = (e) => {
+    if (e.pointerType === "pen") lapizHasta = e.timeStamp + PALMA.GRACIA_LAPIZ_MS;
     if (e.pointerId !== activo) return;
     activo = null;
+    tipoActivo = null;
     terminar(e.type === "pointercancel");
   };
   canvas.addEventListener("pointerup", fin);
@@ -659,12 +760,16 @@ conectarLienzo(pad, {
     ui.trazo = [p];
     pintarPad();
   },
-  mover(p) {
+  mover(lista) {
     if (!ui.trazo) return;
-    const ult = ui.trazo[ui.trazo.length - 1];
-    if (Math.hypot(p.x - ult.x, p.y - ult.y) < 0.5) return;
-    ui.trazo.push(p);
-    pintarPad();
+    let nuevos = 0;
+    for (const p of lista) {
+      const ult = ui.trazo[ui.trazo.length - 1];
+      if (Math.hypot(p.x - ult.x, p.y - ult.y) < 0.5) continue;
+      ui.trazo.push(p);
+      nuevos += 1;
+    }
+    if (nuevos) componerPad();
   },
   terminar(cancelado) {
     const puntos = ui.trazo;
@@ -792,6 +897,66 @@ function pintarHud() {
   const borrar = $("#btn-borrar");
   borrar.hidden = !ui.jefe.activo;
   borrar.disabled = ui.jefe.vencido || !ui.jefe.trazos.length;
+  pintarDeshacer();
+}
+
+function pintarDeshacer() {
+  const btn = $("#btn-deshacer");
+  btn.hidden = tutorial.activo();
+  btn.disabled = !puedeDeshacer();
+}
+
+function copiaStats() {
+  return JSON.parse(JSON.stringify(Object.fromEntries(CAMPOS_DESHACER.map((k) => [k, estado[k]]))));
+}
+
+function apilarDeshacer(paso) {
+  ui.deshacer.push(paso);
+  while (ui.deshacer.length > DESHACER.MAX) ui.deshacer.shift();
+  pintarDeshacer();
+}
+
+function vaciarDeshacer() {
+  ui.deshacer = [];
+  pintarDeshacer();
+}
+
+function puedeDeshacer() {
+  if (!ui.deshacer.length || ui.trazo || tutorial.activo()) return false;
+  if (ui.jefe.activo) return !ui.jefe.vencido && !ui.jefe.resultado && ui.jefe.trazos.length > 0 && ui.deshacer[ui.deshacer.length - 1].modo === "jefe";
+  return ui.deshacer[ui.deshacer.length - 1].modo === "practica";
+}
+
+function deshacer() {
+  if (!puedeDeshacer()) return;
+  const paso = ui.deshacer.pop();
+  Object.assign(estado, paso.stats);
+  if (storage) guardar(storage, SAVE_KEY, estado);
+  escritorMeta.pedir();
+  ui.marca = null;
+  delete pad.dataset.marca;
+  if (paso.modo === "jefe") {
+    ui.jefe.trazos = ui.jefe.trazos.slice(0, -1);
+    const j = ui.oleada && ui.oleada.jefe;
+    if (j) j.vida = Math.min(j.vidaMax, j.vida + paso.dano);
+    $("#lectura").replaceChildren(chip("Deshecho", paso.dano > 0 ? `+${paso.dano} vida al jefe` : "sin daño"));
+  } else {
+    clearTimeout(ui.timerSiguiente);
+    const ej = paso.ej;
+    if (ej.tecnica === TECNICA.PERSPECTIVA) ej.hechos.pop();
+    ui.feedback = null;
+    ui.bloqueoHasta = 0;
+    ui.objetivoBloqueado = null;
+    ui.tecnica = ej.tecnica;
+    ui.ejercicio = ej;
+    pad.dataset.ejercicio = JSON.stringify(ej);
+    $("#lectura").replaceChildren(chip("Deshecho", "último trazo"));
+    pintarTorres();
+    pintarCola();
+  }
+  pintarPista();
+  pintarPad();
+  pintarHud();
 }
 
 function iniciarOleada() {
@@ -975,7 +1140,7 @@ function bucle(ahora) {
   }
   if (ui.pantalla === PANTALLA.JUGAR) {
     pintarCampo(ahora);
-    if (ui.marca || ui.demo) pintarPad();
+    if (ui.marca || ui.demo) componerPad();
   }
   requestAnimationFrame(bucle);
 }
@@ -1029,7 +1194,7 @@ function duracionDemo(n) {
 function estadoDemo() {
   if (!ui.demo || !ui.jefe.escena) return null;
   const trazos = trazosDemoJefe(ui.jefe.escena);
-  const pasado = performance.now() - ui.demo.inicio;
+  const pasado = Math.max(0, performance.now() - ui.demo.inicio);
   if (pasado >= duracionDemo(trazos.length)) return { trazos, hechos: trazos.length, trazo: null, f: 1, fin: true };
   const ciclo = DEMO_JEFE.TRAZO_MS + DEMO_JEFE.PAUSA_MS;
   const hechos = Math.min(trazos.length, Math.floor(pasado / ciclo));
@@ -1093,24 +1258,30 @@ function pararDemo() {
   pintarPad();
 }
 
-function pintarEscenaJefe(ctx) {
+function pintarCapaJefe(ctx) {
   const esc = ui.jefe.escena;
   if (!esc) return;
   const clas = clasificarTrazosJefe(ui.jefe.trazos, esc.fuga);
-  ui.jefe.trazos.forEach((t, i) => trazar(ctx, t, COLOR_TRAZO_JEFE[clas[i].tipo], 3));
-  if (ui.trazo) trazar(ctx, ui.trazo, COLOR.TINTA, 3);
+  ui.jefe.trazos.forEach((t, i) => trazarLibre(ctx, t, COLOR_TRAZO_JEFE[clas[i].tipo]));
+}
+
+function pintarVivoJefe(ctx) {
+  const esc = ui.jefe.escena;
+  if (!esc) return;
+  if (ui.trazo) trazarLibre(ctx, ui.trazo, COLOR.TINTA, false);
   if (ui.demo) pintarDemo(ctx);
   guiaJefe(ctx, esc.fuga, COLOR.MAL, ETIQUETA_GUIA.FUGA);
   guiaJefe(ctx, esc.centro, COLOR.ACENTO, ETIQUETA_GUIA.CENTRO);
 }
 
 function nuevaEscenaJefe() {
-  ui.jefe.escena = escenaJefe(tamPad.w, tamPad.h, arribaPad());
+  ui.jefe.escena = escenaJefe(tamPad.w, tamPad.h, arribaPad(), ui.jefe.azar);
   pad.dataset.jefe = JSON.stringify({ fuga: ui.jefe.escena.fuga, centro: ui.jefe.escena.centro, lado: ui.jefe.escena.lado });
 }
 
 function llegarJefe() {
-  ui.jefe = { ...jefeVacio(), activo: true, nivel: nivelJugador(estado) };
+  vaciarDeshacer();
+  ui.jefe = { ...jefeVacio(), activo: true, nivel: nivelJugador(estado), azar: azarJefe() };
   ui.ejercicio = null;
   ui.feedback = null;
   ui.marca = null;
@@ -1129,6 +1300,7 @@ function llegarJefe() {
 function salirJefe() {
   clearTimeout(ui.jefe.rondaTimer);
   ui.jefe = jefeVacio();
+  vaciarDeshacer();
   ui.demo = null;
   delete pad.dataset.demo;
   delete pad.dataset.jefe;
@@ -1215,6 +1387,7 @@ function danarJefe(dano) {
 }
 
 function vencerJefe() {
+  vaciarDeshacer();
   ui.jefe.vencido = true;
   ui.jefe.bloqueoHasta = Infinity;
   ui.demo = null;
@@ -1248,10 +1421,12 @@ function terminarTrazoJefe(puntos) {
     return;
   }
   ui.jefe.trazos = trazos;
+  const copia = copiaStats();
   const puntaje = puntajeTrazoJefe(c);
   const dano = danoTrazoJefe(puntaje, estado.mejoras[TORRE_DE_TRAZO[c.tipo]]);
   const golpe = danarJefe(dano);
   if (c.tipo === TIPO_TRAZO_JEFE.ELIPSE && c.elipse) { registrarTrazo(estado, TECNICA.ELIPSE, c.elipse, new Date()); persistir(); }
+  apilarDeshacer({ modo: "jefe", dano: golpe.dano, stats: copia });
   const medida = textoMedidaJefe(c);
   const lectura = $("#lectura");
   lectura.classList.remove("puntos");
@@ -1265,6 +1440,7 @@ function terminarTrazoJefe(puntos) {
   marcaJefe(fin, golpe.dano > 0 ? `−${golpe.dano}` : "fallo", `${NOMBRE_TRAZO_JEFE[c.tipo]} ${Math.round(puntaje * 100)}%${medida ? ` · ${medida}` : ""}`, color);
   const falta = faltantesJefe(clas);
   if (!golpe.vencido && Object.values(falta).every((v) => v === 0)) {
+    vaciarDeshacer();
     const res = evaluarJefe(trazos, esc.fuga, ui.jefe.nivel);
     const rotos = res.puntos.filter((p) => p.roto).length;
     const bonus = danarJefe(danoPuntosDebiles(rotos));
@@ -1410,6 +1586,7 @@ function reiniciar() {
 }
 
 function cambiarPantalla(p) {
+  if (p !== PANTALLA.JUGAR) vaciarDeshacer();
   ui.pantalla = p;
   for (const s of document.querySelectorAll(".screen")) s.hidden = s.dataset.screen !== p;
   for (const b of document.querySelectorAll(".tabbar button")) b.classList.toggle("activo", b.dataset.tab === p);
@@ -1429,10 +1606,12 @@ $("#btn-borrar").addEventListener("click", () => {
   if (!ui.jefe.activo || ui.jefe.vencido || performance.now() < ui.jefe.bloqueoHasta) return;
   ui.jefe.trazos = [];
   ui.marca = null;
+  vaciarDeshacer();
   pintarPista();
   pintarPad();
   pintarHud();
 });
+$("#btn-deshacer").addEventListener("click", deshacer);
 
 const tutorial = crearTutorial({
   raiz: $("#tuto"),
@@ -1475,7 +1654,7 @@ function redimensionar() {
   tamPad = ajustarCanvas(pad);
   const cambio = antesW !== tamPad.w || antesH !== tamPad.h;
   if (ui.jefe.activo) {
-    if (cambio || !ui.jefe.escena) { ui.jefe.trazos = []; nuevaEscenaJefe(); pintarPista(); }
+    if (cambio || !ui.jefe.escena) { ui.jefe.trazos = []; vaciarDeshacer(); nuevaEscenaJefe(); pintarPista(); }
     pintarPad();
   } else if (!ui.ejercicio || cambio) { ui.feedback = null; nuevoEjercicio(true); }
   else pintarPad();
