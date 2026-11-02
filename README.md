@@ -4,7 +4,7 @@
 
 **[▶ Jugar ahora](https://juliangdeveloper.github.io/trazo-defense/)** · gratis, en el navegador, sin instalar
 
-<img src="docs/screenshot.png" alt="Partida de Trazo Defense con monstruos bajando y la caja del ejercicio de elipse" width="320">
+<img src="docs/screenshot.png" alt="Partida de Trazo Defense: una elipse acaba de dañar a un monstruo con 27 de daño y abajo aparecen sus métricas" width="320">
 
 ## Cómo se juega
 
