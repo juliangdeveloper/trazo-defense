@@ -3,7 +3,7 @@ import {
   JEFE, COMPARA, PANTALLA, MODO, FASE_PUNTOS, PUNTO_FASE, FASES_NOMBRE, ESTADOS_NOMBRE, TIPOS_NOMBRE, TOTAL_FASES, OLEADA, MEJORA, CAMARA_LENTA, ZONA_DIBUJO, COLA,
   DEMO_JEFE, BATALLA_JEFE, PALMA, DESHACER, DESTELLO, DIMENSIONES, NIVEL_ATAQUE,
 } from "./config.js";
-import { PROYECTO, FASE, metaProyecto, metaUpdate, metaRead, crearEscritor } from "./meta.js";
+import { PROYECTO, FASE, metaProyecto, metaUpdate, metaRead, crearEscritor, metaDeclararProyecto } from "./meta.js";
 import { evaluarLinea, evaluarElipse, evaluarFugante, asignarArista, resumenCubo, evaluarJefe, clasificarTrazosJefe, faltantesJefe, cuentaJefe, CUPO_JEFE, TIPO_TRAZO_JEFE, calificarAtaque, combinarAtaques } from "./geometry.js";
 import {
   STATS, cargar, guardar, registrarTrazo, promedioMovil, nivelTecnica, nivelJugador, minimosCapitulo, jefeDesbloqueado,
@@ -1764,6 +1764,7 @@ pintarTorres();
 redimensionar();
 pintarHud();
 if (!metaRead(APP_ID)) escritorMeta.pedir();
+metaDeclararProyecto(APP_ID, APP_VERSION);
 requestAnimationFrame(bucle);
 if (!estado.tutorialVisto) abrirTutorial();
 

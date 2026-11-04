@@ -28,6 +28,7 @@
 ## Stack
 
 HTML, CSS y JavaScript con módulos ES. Funciona sin conexión con service worker y guarda el progreso en `localStorage`.
+Al abrirse guarda el progreso en `localStorage` (`meta.v1.trazo-defense`), que lee el [portafolio](https://juliangdeveloper.github.io/).
 
 ```bash
 python3 -m http.server 8080

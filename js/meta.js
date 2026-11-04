@@ -13,17 +13,9 @@ export const PROYECTO = Object.freeze({
   fases_completadas: 3,
   tipo: TIPO_PROYECTO.PROYECTO,
   aportes: [
-    { id: "programacion", aporte: 2, fuente: "creacion" },
-    { id: "juegos", aporte: 2, fuente: "creacion" },
-    { id: "geometria", aporte: 3, fuente: "creacion" },
-    { id: "graficos", aporte: 2, fuente: "creacion" },
-    { id: "ux", aporte: 1, fuente: "creacion" },
-    { id: "dibujo", aporte: 3, fuente: "uso" },
-    { id: "precision", aporte: 2, fuente: "uso" },
-    { id: "geometria", aporte: 1, fuente: "uso" },
-    { id: "perseverancia", aporte: 2, fuente: "uso" },
-    { id: "disciplina", aporte: 2, fuente: "uso" },
-    { id: "atencion", aporte: 1, fuente: "uso" }
+    { stat: "Programación", exp: 36, fuente: "creacion" },
+    { stat: "Diseño", exp: 6, fuente: "creacion" },
+    { stat: "Dibujo", exp: 20, fuente: "uso" }
   ],
 });
 
@@ -47,6 +39,9 @@ export function statsDeclarados(stats) {
   return Object.keys(stats).map((key) => ({ key, tipo: stats[key] && stats[key].tipo }));
 }
 
+const APORTE_STAT_MAX = 32;
+const APORTE_EXP_MAX = 99;
+
 function aportesValidos(lista) {
   if (!Array.isArray(lista)) return null;
   const out = [];
@@ -54,17 +49,17 @@ function aportesValidos(lista) {
   for (let i = 0; i < lista.length; i++) {
     const it = lista[i];
     if (!it || typeof it !== "object" || Array.isArray(it)) return null;
-    const id = it.id;
+    const stat = it.stat;
+    const exp = it.exp;
     const fuente = it.fuente;
-    const aporte = it.aporte;
-    if (typeof id !== "string" || !/^[a-z][a-z0-9]*$/.test(id)) return null;
+    if (typeof stat !== "string" || !stat.trim() || stat !== stat.trim() || Array.from(stat).length > APORTE_STAT_MAX) return null;
     if (fuente !== "creacion" && fuente !== "uso") return null;
-    if (!proyectoInt(aporte, 1, 3)) return null;
-    const key = id + "\n" + fuente;
+    if (!(proyectoInt(exp, 1, APORTE_EXP_MAX))) return null;
+    const key = stat + "\n" + fuente;
     if (seen[key]) return null;
     if (Object.keys(it).length !== 3) return null;
     seen[key] = true;
-    out.push({ id: id, aporte: aporte, fuente: fuente });
+    out.push({ stat: stat, exp: exp, fuente: fuente });
   }
   return out;
 }
@@ -94,6 +89,36 @@ export function metaSetProyecto(p) {
   proyectoSource = p === null ? PROYECTO : p;
 }
 
+export function metaDeclararProyecto(slug, version) {
+  try {
+    const store = globalThis.localStorage;
+    if (!store || !slug) return null;
+    const clave = "meta.v1." + slug;
+    const raw = store.getItem(clave);
+    let base = null;
+    if (raw != null && raw !== "") {
+      try {
+        const previo = JSON.parse(raw);
+        if (previo && typeof previo === "object" && !Array.isArray(previo) && previo.v === 1 && previo.slug === slug) base = previo;
+      } catch (e) {
+        base = null;
+      }
+      if (!base) store.setItem(clave + ".corrupt", String(raw));
+    }
+    if (!base) base = { v: 1, slug: slug, version: String(version == null ? "" : version).replace(/^[vV]/, ""), updatedAt: new Date().toISOString(), stats: {}, logros: [], hitos: {} };
+    const p = metaProyecto(proyectoSource);
+    if (p) base.proyecto = p;
+    const texto = JSON.stringify(base);
+    if (texto !== raw) {
+      store.setItem(clave, texto);
+      if (typeof window !== "undefined" && window.parent && window.parent !== window) window.parent.postMessage({ type: "meta", key: clave, data: base }, location.origin);
+    }
+    return base;
+  } catch (e) {
+    return null;
+  }
+}
+
 export function metaKey(slug) {
   return "meta.v1." + slug;
 }
@@ -106,20 +131,6 @@ function plainVersion(version) {
   let s = version == null ? "" : String(version);
   if (s.charAt(0) === "v" || s.charAt(0) === "V") s = s.slice(1);
   return s;
-}
-
-export function demoOn(opts) {
-  if (opts && opts.demo === true) return true;
-  let search = "";
-  if (opts && typeof opts.search === "string") search = opts.search;
-  else {
-    try {
-      if (typeof location !== "undefined" && location && typeof location.search === "string") search = location.search;
-    } catch (e) {
-      search = "";
-    }
-  }
-  return /(^|[?&])(demo|preview)=1(&|$)/.test(search);
 }
 
 function declaredList(declare) {
@@ -180,7 +191,6 @@ export function metaUpdate(slug, version, patch, opts) {
   try {
     opts = opts || {};
     patch = patch || {};
-    if (demoOn(opts)) return null;
     const storage = opts.storage || defaultStorage();
     if (!storage || typeof storage.getItem !== "function" || typeof storage.setItem !== "function") return null;
 
