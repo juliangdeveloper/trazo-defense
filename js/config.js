@@ -1,5 +1,5 @@
 export const APP_ID = "trazo-defense";
-export const APP_VERSION = "0.2.1";
+export const APP_VERSION = "0.2.2";
 export const SAVE_KEY = "trazo-defense.save";
 export const SAVE_VERSION = 2;
 export const CACHE_PREFIX = "trazo-defense-";
@@ -348,10 +348,12 @@ export const MODO = Object.freeze({
 export const CAPITULO_INFO = Object.freeze({
   [CAPITULO.UNO]: Object.freeze({
     titulo: "Capítulo 1 · Drawabox",
+    corto: "Líneas, cajas y elipses",
     resumen: "Líneas, elipses y cajas en un punto de fuga. Cumple los mínimos y el Guardián del Punto de Fuga aparece al final de cada oleada.",
   }),
   [CAPITULO.DOS]: Object.freeze({
     titulo: "Capítulo 2 · Formas en el espacio",
+    corto: "Formas y 2 puntos",
     resumen: "Flechas que se tuercen, salchichas con contornos y cajas en dos puntos de fuga. El Gólem de Intersecciones aparece al final cuando cumples los mínimos.",
   }),
 });

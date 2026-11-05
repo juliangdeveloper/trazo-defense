@@ -10,7 +10,7 @@ export const PASOS = Object.freeze([
   Object.freeze({ id: "cola", foco: "#cola", titulo: "Lo que viene", texto: "«Luego» muestra la técnica de los monstruos que siguen en la fila: son tus próximos ejercicios cuando cae el de adelante.", accion: ACCION_TUTORIAL.NINGUNA }),
   Object.freeze({ id: "mejoras", foco: ".torre .torre-btn", titulo: "La tinta sube tus torres", texto: "Cada torre muestra su mejora (M0) y, debajo, cuánta tinta lleva hacia la siguiente, por ejemplo 7/10. Cada 10 de tinta la torre de menor nivel del capítulo activo sube sola y cambia de aspecto; las demás dicen «luego».", accion: ACCION_TUTORIAL.NINGUNA }),
   Object.freeze({ id: "jefe", foco: "#campo-wrap", titulo: "El jefe al final de la oleada", texto: "Cuando cumples los mínimos del capítulo, el jefe llega al final de cada oleada. Capítulo 1: caja en un punto con elipse. Capítulo 2: caja en dos puntos, cilindro que la atraviesa e intersección. Mira la demo con «Ver demo». Cada trazo es un ataque en 5 dimensiones y lanza un destello de anillos.", accion: ACCION_TUTORIAL.NINGUNA }),
-  Object.freeze({ id: "progreso", foco: "[data-tab='progreso']", titulo: "Tu nivel es tu dibujo", texto: "El nivel de cada técnica sale del promedio de tus últimos 20 trazos. En Progreso eliges capítulo y ves mínimos y curvas. Puedes repetir este tutorial desde Ajustes.", accion: ACCION_TUTORIAL.NINGUNA }),
+  Object.freeze({ id: "progreso", foco: "#cap-sel", titulo: "Elige el capítulo", texto: "Arriba puedes pasar del capítulo 1 (líneas, cajas y elipses) al 2 (formas y 2 puntos) cuando quieras. En Progreso ves mínimos y curvas de cada uno. Puedes repetir este tutorial desde Ajustes.", accion: ACCION_TUTORIAL.NINGUNA }),
 ]);
 
 export function crearTutorial({ raiz, alTerminar, alEntrarPaso }) {

@@ -16,8 +16,8 @@
   <title>Trazo Defense</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
-  <link rel="manifest" href="manifest.json?v=0.2.1">
-  <link rel="stylesheet" href="css/styles.css?v=0.2.1">
+  <link rel="manifest" href="manifest.json?v=0.2.2">
+  <link rel="stylesheet" href="css/styles.css?v=0.2.2">
 </head>
 <body>
   <header class="bar">
@@ -34,7 +34,13 @@
   <main class="view" id="view">
     <section class="screen" id="screen-jugar" data-screen="jugar">
       <div class="hud">
-        <p class="hud-estado" id="hud-estado" aria-live="polite">Libre</p>
+        <div class="hud-izq">
+          <div class="cap-sel" id="cap-sel" role="radiogroup" aria-label="Capítulo">
+            <button type="button" class="cap-opt" role="radio" data-cap="1" aria-checked="false">Cap. 1</button>
+            <button type="button" class="cap-opt" role="radio" data-cap="2" aria-checked="false">Cap. 2</button>
+          </div>
+          <p class="hud-estado" id="hud-estado" aria-live="polite">Libre</p>
+        </div>
         <div class="hud-acciones">
           <button class="chip-btn" type="button" id="btn-oleada">Oleada</button>
           <button class="chip-btn" type="button" id="btn-deshacer" disabled>Deshacer</button>
@@ -125,6 +131,6 @@
   </div>
 
   <p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
-  <script type="module" src="js/app.js?v=0.2.1"></script>
+  <script type="module" src="js/app.js?v=0.2.2"></script>
 </body>
 </html>

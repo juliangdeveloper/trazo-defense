@@ -4,17 +4,18 @@
 
 **[▶ Jugar ahora](https://juliangdeveloper.github.io/trazo-defense/)** · gratis, en el navegador, sin instalar
 
-<img src="img/screenshot.png" alt="Partida de Trazo Defense (capítulo 2: flecha, salchicha y caja en 2 puntos)" width="320">
+<img src="img/screenshot.png" alt="Trazo Defense con selector de capítulo Cap. 1 / Cap. 2 en Jugar" width="320">
 
 ## Cómo se juega
 
 - Los monstruos salen por arriba y bajan hacia tu cuaderno, abajo. Dibujas sobre el campo, en la franja entre ellos y la base, y la torre activa dispara.
+- Elige el capítulo con **Cap. 1 / Cap. 2** en la fila superior de Jugar. Fuera de una oleada el cambio es inmediato.
 - Mientras dibujas, los monstruos van en cámara lenta. «Luego» muestra los próximos ejercicios.
 - **Capítulo 1**
   - **Línea:** une los dos puntos. Se mide desviación, extremos, repasos y velocidad.
   - **Elipse:** dibújala dentro de la caja. Se mide ajuste, cierre y temblor.
   - **Perspectiva:** cierra un cubo en un punto de fuga con 3 rectas. Se mide convergencia, cierre y rectitud.
-- **Capítulo 2** (se abre al vencer al jefe del 1 y cumplir sus mínimos; puedes volver al 1 desde Progreso o Ajustes)
+- **Capítulo 2** (cámbialo cuando quieras con el selector Cap. 1 / Cap. 2 arriba en Jugar; el jefe del 2 pide sus propios mínimos)
   - **Flecha:** dibuja los dos bordes de una cinta que se curva y se encoge con la distancia. Se mide suavidad, encogimiento y solape.
   - **Salchicha:** dibuja 2 elipses de contorno sobre la forma. Lo clave es que el eje menor de cada elipse siga el eje central.
   - **Caja 2p:** cierra una caja rotada con 4 rectas hacia dos puntos de fuga. Se mide convergencia, cierre y rectitud.

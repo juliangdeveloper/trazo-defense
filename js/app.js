@@ -12,7 +12,7 @@ import {
 import {
   STATS, cargar, guardar, registrarTrazo, promedioMovil, nivelTecnica, nivelJugador, minimosCapitulo, jefeDesbloqueado,
   tecnicaMasDebil, siguienteMejora, progresoTinta, subirConTinta, completarSesion, registrarOleada, registrarJefe, curva, statsMeta, logrosDe,
-  tecnicasDe, capitulo2Desbloqueado, elegirCapitulo,
+  tecnicasDe, elegirCapitulo,
 } from "./progress.js";
 import { crearOleada, actualizarOleada, objetivoPrincipal, elegirObjetivo, puntoEnCamino, danoDeTrazo, atacar, tipoMonstruo, efectoMejora, proximasTecnicas, danoAtaqueJefe, danoAtaqueFinal, multiplicadorDeNiveles, danoPuntosDebiles, golpearJefe, cobrarTinta } from "./game.js";
 import { crearEjercicio, escenaJefe, azarJefe, trazosDemoJefe, aristasCubo, escenaJefe2, azarJefe2, trazosDemoJefe2 } from "./ejercicios.js";
@@ -1121,16 +1121,31 @@ function elegirTorre(t) {
   nuevoEjercicio(true);
 }
 
+function pintarCapSel() {
+  const enOleada = ui.modo === MODO.OLEADA || ui.jefe.activo;
+  for (const btn of document.querySelectorAll("#cap-sel .cap-opt")) {
+    const cap = Number(btn.dataset.cap);
+    const activo = cap === estado.capitulo;
+    btn.classList.toggle("activo", activo);
+    btn.setAttribute("aria-checked", activo ? "true" : "false");
+    btn.disabled = enOleada;
+    const info = CAPITULO_INFO[cap];
+    btn.title = info.corto;
+    btn.setAttribute("aria-label", `Capítulo ${cap}: ${info.corto}`);
+  }
+}
+
 function pintarHud() {
   const est = $("#hud-estado");
   const ola = $("#btn-oleada");
   const demo = $("#btn-demo");
+  pintarCapSel();
   if (ui.modo === MODO.OLEADA && ui.oleada) {
     const o = ui.oleada;
     if (o.jefe && ui.jefe.activo) est.textContent = `Oleada ${o.numero} · Jefe ${Math.max(0, o.jefe.vida)}/${o.jefe.vidaMax}`;
     else est.textContent = `Oleada ${o.numero} · ${o.vidas} vidas · quedan ${o.cola.length + o.vivos.length}`;
   } else {
-    est.textContent = `Libre · C${estado.capitulo} · nv.${nivelJugador(estado, estado.capitulo)}`;
+    est.textContent = CAPITULO_INFO[estado.capitulo].corto;
   }
   ola.disabled = ui.modo !== MODO.LIBRE;
   ola.hidden = ui.jefe.activo;
@@ -1734,15 +1749,11 @@ function vencerJefe() {
   ui.demo = null;
   const conf = jefeActual();
   registrarJefe(estado, true, conf.recompensaTinta, estado.capitulo);
-  if (estado.capitulo === CAPITULO.UNO && capitulo2Desbloqueado(estado)) {
-    estado.capitulo = CAPITULO.DOS;
-  }
   aplicarSubidas();
   persistir();
   const pj = posJefe();
   ui.textos.push({ x: pj.x, y: pj.y + 10 * escalaCampo(), texto: `+${conf.recompensaTinta}`, inicio: performance.now(), color: COLOR.ACENTO });
   ui.jefe.finHasta = performance.now() + BATALLA_JEFE.RONDA_MS;
-  if (conf.capitulo === CAPITULO.UNO && estado.capitulo === CAPITULO.DOS) toast("Capítulo 2 desbloqueado: flechas, salchichas y cajas en 2 puntos.");
 }
 
 function terminarTrazoJefe2(puntos) {
@@ -1941,11 +1952,10 @@ function tarjetaCapitulo(cap) {
   const info = CAPITULO_INFO[cap];
   const minimos = minimosCapitulo(estado, cap);
   const activo = estado.capitulo === cap;
-  const desbloqueado = cap === CAPITULO.UNO || capitulo2Desbloqueado(estado);
   const jefe = JEFES[cap];
   const victorias = cap === CAPITULO.DOS ? estado.contadores.jefesCap2 : estado.contadores.jefes;
   const hijos = [
-    h("div", { class: "fila" }, h("h2", { text: info.titulo }), h("span", { class: "nivel", text: activo ? "Activo" : (desbloqueado ? "Disponible" : "Bloqueado") })),
+    h("div", { class: "fila" }, h("h2", { text: info.titulo }), h("span", { class: "nivel", text: activo ? "Activo" : "Disponible" })),
     h("p", { class: "tenue", text: info.resumen }),
     h("ul", { class: "lista" }, [
       ...minimos.map((m) => h("li", { "data-minimo": m.tecnica },
@@ -1954,9 +1964,7 @@ function tarjetaCapitulo(cap) {
       h("li", {}, h("span", { class: "marca" + (victorias ? " hecho" : ""), text: victorias ? "✓" : "" }), h("span", { text: `Jefe: ${jefe.nombre}` + (victorias ? ` · vencido ${victorias} ${victorias === 1 ? "vez" : "veces"}` : "") })),
     ]),
   ];
-  if (!desbloqueado) {
-    hijos.push(h("p", { class: "tenue", text: "Se desbloquea al vencer al jefe del capítulo 1 y cumplir sus mínimos." }));
-  } else if (!activo) {
+  if (!activo) {
     hijos.push(h("button", { class: "btn primary ancho", type: "button", text: "Jugar este capítulo", onclick: () => cambiarCapitulo(cap) }));
   }
   return h("div", { class: "card" + (activo ? " activo-cap" : ""), "data-capitulo": String(cap) }, ...hijos);
@@ -1967,10 +1975,8 @@ function cambiarCapitulo(cap) {
     toast("Termina la oleada para cambiar de capítulo.");
     return;
   }
-  if (!elegirCapitulo(estado, cap)) {
-    toast("Aún no desbloqueas ese capítulo.");
-    return;
-  }
+  if (estado.capitulo === cap) return;
+  if (!elegirCapitulo(estado, cap)) return;
   persistir();
   ui.tecnica = tecnicasActivas()[0];
   ui.feedback = null;
@@ -1978,8 +1984,9 @@ function cambiarCapitulo(cap) {
   pintarTorres();
   nuevoEjercicio(true);
   pintarHud();
-  pintarProgreso();
-  toast(`Capítulo ${cap} activo.`);
+  if (ui.pantalla === PANTALLA.PROGRESO) pintarProgreso();
+  if (ui.pantalla === PANTALLA.AJUSTES) pintarAjustes();
+  toast(`Capítulo ${cap}: ${CAPITULO_INFO[cap].corto}.`);
 }
 
 function pintarProgreso() {
@@ -2004,16 +2011,7 @@ function pintarProgreso() {
 
 function pintarAjustes() {
   const raiz = $("#screen-ajustes");
-  const cap2 = capitulo2Desbloqueado(estado);
-  const btn1 = h("button", { class: "btn" + (estado.capitulo === CAPITULO.UNO ? " primary" : "") + " ancho", type: "button", text: "Capítulo 1", onclick: () => { cambiarCapitulo(CAPITULO.UNO); pintarAjustes(); } });
-  const btn2 = h("button", { class: "btn" + (estado.capitulo === CAPITULO.DOS ? " primary" : "") + " ancho", type: "button", text: "Capítulo 2", onclick: () => { cambiarCapitulo(CAPITULO.DOS); pintarAjustes(); } });
-  if (estado.capitulo === CAPITULO.UNO) btn1.disabled = true;
-  if (!cap2 || estado.capitulo === CAPITULO.DOS) btn2.disabled = true;
   raiz.replaceChildren(
-    h("div", { class: "card" },
-      h("h2", { text: "Capítulo" }),
-      h("p", { class: "tenue", text: cap2 ? `Ahora juegas el capítulo ${estado.capitulo}. Puedes volver al 1 o pasar al 2 cuando quieras.` : "Estás en el capítulo 1. El 2 se abre al vencer a su jefe y cumplir los mínimos." }),
-      h("div", { class: "fila", style: "gap:8px;flex-wrap:wrap" }, btn1, btn2)),
     h("div", { class: "card" },
       h("h2", { text: "Tutorial" }),
       h("p", { class: "tenue", text: "Repasa cómo se ataca dibujando, cómo se mide cada trazo y el jefe." }),
@@ -2074,6 +2072,11 @@ $("#leyenda-cerrar").addEventListener("click", cerrarLeyenda);
 $("#leyenda-velo").addEventListener("click", cerrarLeyenda);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#leyenda").hidden) cerrarLeyenda(); });
 
+$("#cap-sel").addEventListener("click", (e) => {
+  const btn = e.target.closest(".cap-opt");
+  if (!btn || btn.disabled) return;
+  cambiarCapitulo(Number(btn.dataset.cap));
+});
 $("#btn-oleada").addEventListener("click", iniciarOleada);
 $("#btn-demo").addEventListener("click", arrancarDemo);
 $("#btn-borrar").addEventListener("click", () => {

@@ -113,7 +113,6 @@ export function normalizarEstado(raw) {
   base.tutorialVisto = raw.tutorialVisto === true;
   const cap = numero(raw.capitulo, CAPITULO.UNO);
   base.capitulo = cap === CAPITULO.DOS ? CAPITULO.DOS : CAPITULO.UNO;
-  if (base.capitulo === CAPITULO.DOS && !capitulo2Desbloqueado(base)) base.capitulo = CAPITULO.UNO;
   return base;
 }
 
@@ -220,7 +219,6 @@ export function capitulo2Desbloqueado(estado) {
 }
 
 export function elegirCapitulo(estado, capitulo) {
-  if (capitulo === CAPITULO.DOS && !capitulo2Desbloqueado(estado)) return false;
   if (capitulo !== CAPITULO.UNO && capitulo !== CAPITULO.DOS) return false;
   estado.capitulo = capitulo;
   return true;
@@ -291,9 +289,6 @@ export function registrarJefe(estado, vencido, recompensa, capitulo = CAPITULO.U
   if (capitulo === CAPITULO.DOS) estado.contadores.jefesCap2 += 1;
   else estado.contadores.jefes += 1;
   estado.tinta += Math.max(0, recompensa || 0);
-  if (capitulo === CAPITULO.UNO && capitulo2Desbloqueado(estado) && estado.capitulo === CAPITULO.UNO) {
-    estado.capitulo = CAPITULO.DOS;
-  }
   return estado;
 }
 

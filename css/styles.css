@@ -82,7 +82,19 @@ button { font: inherit; color: inherit; }
 #screen-jugar { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }
 
 .hud { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
-.hud-estado { margin: 0; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; flex: 1 1 auto; min-width: 0; line-height: 1.25; }
+.hud-izq { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; }
+.cap-sel { display: inline-flex; flex: 0 0 auto; border: 1px solid var(--linea); border-radius: 999px; overflow: hidden; background: var(--hoja); }
+.cap-opt {
+  border: 0; background: transparent; color: var(--tinta); padding: 0 10px; min-height: 32px;
+  font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.cap-opt.activo { background: var(--tinta); color: var(--hoja); }
+.cap-opt:disabled { opacity: 0.45; cursor: default; }
+.hud-estado {
+  margin: 0; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
+  flex: 1 1 auto; min-width: 0; line-height: 1.2; color: var(--tenue);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .hud-acciones { display: flex; gap: 6px; flex: 0 0 auto; }
 
 .chip-btn {
@@ -418,7 +430,8 @@ button { font: inherit; color: inherit; }
 @media (min-width: 700px) {
   .view { max-width: 900px; padding: 0 calc(16px + var(--right)) 0 calc(16px + var(--left)); }
   #screen-jugar { gap: 10px; padding: 12px 0; }
-  .hud-estado { font-size: 16px; }
+  .hud-estado { font-size: 15px; }
+  .cap-opt { font-size: 14px; min-height: 34px; padding: 0 12px; }
   .zona-cabeza .pad-hint { font-size: 15px; }
   .cola-item { width: 28px; height: 28px; }
   .cola-item svg { width: 18px; height: 18px; }
