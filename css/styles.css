@@ -338,15 +338,6 @@ button { font: inherit; color: inherit; }
 .icon-btn { width: 44px; height: 44px; border: 0; background: none; display: grid; place-items: center; cursor: pointer; flex: 0 0 auto; }
 .icon-btn svg { width: 22px; height: 22px; }
 
-.proyecto { padding: 10px 12px; border: 1px solid var(--linea); border-radius: 10px; background: #faf8f2; font-size: 14px; line-height: 1.35; }
-.proyecto p { margin: 0; }
-.proyecto-fase { font-weight: 600; }
-.proyecto-barra { height: 4px; margin: 8px 0; border-radius: 999px; background: var(--linea); overflow: hidden; }
-.proyecto-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--acento), #8a6ee0); }
-.proyecto-objetivo { color: var(--tenue); }
-.proyecto.estado-2 .proyecto-fase { color: var(--aviso); }
-.proyecto.estado-4 .proyecto-fase { color: var(--bien); }
-
 .tuto { position: absolute; inset: 0; pointer-events: none; }
 .tuto-velo { position: absolute; inset: 0; z-index: 50; background: rgba(31, 29, 43, 0.45); pointer-events: auto; }
 .tuto.interactivo .tuto-velo { background: rgba(31, 29, 43, 0.3); }

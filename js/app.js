@@ -1,9 +1,9 @@
 import {
   APP_ID, APP_VERSION, SAVE_KEY, TECNICA, TECNICAS, TORRE, METRICA_PRINCIPAL, CAMINO, PUNTAJE,
-  JEFE, JEFES, JEFE_CAP2, COMPARA, PANTALLA, MODO, CAPITULO, CAPITULO_INFO, FASES_NOMBRE, ESTADOS_NOMBRE, TIPOS_NOMBRE, TOTAL_FASES, OLEADA, MEJORA, CAMARA_LENTA, ZONA_DIBUJO, COLA,
+  JEFE, JEFES, JEFE_CAP2, COMPARA, PANTALLA, MODO, CAPITULO, CAPITULO_INFO, OLEADA, MEJORA, CAMARA_LENTA, ZONA_DIBUJO, COLA,
   DEMO_JEFE, BATALLA_JEFE, PALMA, DESHACER, DESTELLO, DIMENSIONES, NIVEL_ATAQUE,
 } from "./config.js";
-import { PROYECTO, FASE, metaProyecto, metaUpdate, metaRead, crearEscritor, metaDeclararProyecto } from "./meta.js";
+import { metaUpdate, metaRead, crearEscritor, metaDeclararProyecto } from "./meta.js";
 import {
   evaluarLinea, evaluarElipse, evaluarFugante, asignarArista, resumenCubo, evaluarJefe, clasificarTrazosJefe, faltantesJefe, cuentaJefe, CUPO_JEFE, TIPO_TRAZO_JEFE, calificarAtaque, combinarAtaques,
   evaluarBordeFlecha, resumenFlecha, asignarBorde, evaluarContornoSalchicha, resumenSalchicha, resumenCaja2p,
@@ -279,7 +279,6 @@ function pintarPista() {
   let texto = textos[ui.tecnica] || "";
   const ej = ui.ejercicio;
   if (ej && totalHechos(ej) > 1 && ej.tecnica === ui.tecnica) texto += ` ${ej.hechos.length}/${totalHechos(ej)}.`;
-  if (ui.modo === MODO.LIBRE && !tutorial.activo()) texto += " Sin oleada: práctica.";
   pista.textContent = texto;
 }
 
@@ -1131,7 +1130,7 @@ function pintarHud() {
     if (o.jefe && ui.jefe.activo) est.textContent = `Oleada ${o.numero} · Jefe ${Math.max(0, o.jefe.vida)}/${o.jefe.vidaMax}`;
     else est.textContent = `Oleada ${o.numero} · ${o.vidas} vidas · quedan ${o.cola.length + o.vivos.length}`;
   } else {
-    est.textContent = `Práctica libre · cap. ${estado.capitulo} · nivel ${nivelJugador(estado, estado.capitulo)}`;
+    est.textContent = `Libre · C${estado.capitulo} · nv.${nivelJugador(estado, estado.capitulo)}`;
   }
   ola.disabled = ui.modo !== MODO.LIBRE;
   ola.hidden = ui.jefe.activo;
@@ -1355,7 +1354,7 @@ function pintarCampo(ahora) {
     ctx.fillStyle = "rgba(31,29,43,0.55)";
     ctx.font = `${Math.round(13 * s)}px -apple-system, system-ui, sans-serif`;
     ctx.textAlign = "center";
-    ctx.fillText("Sin oleada: pulsa Oleada", w / 2, alto * ZONA_DIBUJO.ARRIBA * 0.62);
+    ctx.fillText("Pulsa Oleada para empezar", w / 2, alto * ZONA_DIBUJO.ARRIBA * 0.62);
     ctx.textAlign = "start";
   }
 }
@@ -1390,7 +1389,8 @@ function bucle(ahora) {
     pintarDestellos(ahora);
     if (ui.marca || ui.demo) componerPad();
   }
-  requestAnimationFrame(bucle);
+  
+requestAnimationFrame(bucle);
 }
 
 const COLOR_TRAZO_JEFE = Object.freeze({
@@ -1663,7 +1663,7 @@ function marcaJefe(fin, grande, chico, color) {
 
 function chipPunto(p) {
   const valor = p.valor === null ? "–" : `${fmt(p.valor)}${p.unidad}`;
-  return h("span", { class: "dato " + (p.roto ? "bien" : "mal"), "data-punto": p.id, title: `${p.texto} ${valor}; meta ${p.compara === COMPARA.MENOR_O_IGUAL ? "≤" : "≥"} ${fmt(p.meta)}${p.unidad}` }, `${p.roto ? "✓" : "✗"} ${p.corto || p.nombre} `, h("b", { text: valor }));
+  return h("span", { class: "dato " + (p.roto ? "bien" : "mal"), "data-punto": p.id, title: `${p.texto} ${valor}; objetivo ${p.compara === COMPARA.MENOR_O_IGUAL ? "≤" : "≥"} ${fmt(p.meta)}${p.unidad}` }, `${p.roto ? "✓" : "✗"} ${p.corto || p.nombre} `, h("b", { text: valor }));
 }
 
 function resumenNiveles(ataque) {
@@ -2002,26 +2002,6 @@ function pintarProgreso() {
   );
 }
 
-function pintarProyecto() {
-  const raiz = $("#screen-proyecto");
-  const p = metaProyecto(PROYECTO);
-  const bloque = h("div", { class: "proyecto" + (p ? ` estado-${p.fase_estado}` : ""), id: "proyecto-bloque" });
-  if (p) {
-    const descartada = p.fase === FASE.DESCARTADA;
-    bloque.append(
-      h("p", { class: "proyecto-fase", text: descartada ? `Descartada · ${p.fases_completadas}/${TOTAL_FASES} fases` : `Fase ${p.fase}/${TOTAL_FASES} · ${FASES_NOMBRE[p.fase - 1]} · ${ESTADOS_NOMBRE[p.fase_estado]}` }),
-      h("div", { class: "proyecto-barra", role: "progressbar", "aria-label": "Fases completadas", "aria-valuemin": "0", "aria-valuemax": String(TOTAL_FASES), "aria-valuenow": String(p.fases_completadas), "aria-valuetext": `${p.fases_completadas} de ${TOTAL_FASES} fases completadas` },
-        h("span", { style: `width:${Math.round((p.fases_completadas / TOTAL_FASES) * 100)}%` })),
-      h("p", { class: "proyecto-objetivo", text: p.objetivo }));
-  }
-  raiz.replaceChildren(
-    h("div", { class: "card" },
-      h("h2", { text: "Fase del proyecto" }),
-      bloque,
-      h("p", { class: "tenue", text: `Tipo: ${TIPOS_NOMBRE[PROYECTO.tipo] || "–"}` })),
-  );
-}
-
 function pintarAjustes() {
   const raiz = $("#screen-ajustes");
   const cap2 = capitulo2Desbloqueado(estado);
@@ -2048,7 +2028,7 @@ function pintarAjustes() {
       h("button", { class: "btn peligro ancho", type: "button", onclick: reiniciar, text: "Borrar mi progreso" })),
     h("div", { class: "card" },
       h("h2", { text: "Acerca de" }),
-      h("p", { class: "tenue", text: `${APP_ID} v${APP_VERSION}. Capítulos 1 y 2 de Drawabox medidos con geometría sobre tus trazos, sin modelos de IA.` })),
+      h("p", { class: "tenue", text: `Trazo Defense v${APP_VERSION}. Capítulos 1 y 2 de Drawabox medidos con geometría sobre tus trazos, sin modelos de IA.` })),
   );
 }
 
@@ -2064,7 +2044,6 @@ function cambiarPantalla(p) {
   for (const s of document.querySelectorAll(".screen")) s.hidden = s.dataset.screen !== p;
   for (const b of document.querySelectorAll(".tabbar button")) b.classList.toggle("activo", b.dataset.tab === p);
   if (p === PANTALLA.PROGRESO) pintarProgreso();
-  if (p === PANTALLA.PROYECTO) pintarProyecto();
   if (p === PANTALLA.AJUSTES) pintarAjustes();
   if (p === PANTALLA.JUGAR) requestAnimationFrame(redimensionar);
 }

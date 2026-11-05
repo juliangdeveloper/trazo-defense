@@ -4,7 +4,7 @@
 
 **[▶ Jugar ahora](https://juliangdeveloper.github.io/trazo-defense/)** · gratis, en el navegador, sin instalar
 
-<img src="img/screenshot.png" alt="Partida de Trazo Defense con las torres del capítulo 2" width="320">
+<img src="img/screenshot.png" alt="Partida de Trazo Defense (capítulo 2: flecha, salchicha y caja en 2 puntos)" width="320">
 
 ## Cómo se juega
 

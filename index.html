@@ -16,8 +16,8 @@
   <title>Trazo Defense</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
-  <link rel="manifest" href="manifest.json?v=0.2.0">
-  <link rel="stylesheet" href="css/styles.css?v=0.2.0">
+  <link rel="manifest" href="manifest.json?v=0.2.1">
+  <link rel="stylesheet" href="css/styles.css?v=0.2.1">
 </head>
 <body>
   <header class="bar">
@@ -34,7 +34,7 @@
   <main class="view" id="view">
     <section class="screen" id="screen-jugar" data-screen="jugar">
       <div class="hud">
-        <p class="hud-estado" id="hud-estado" aria-live="polite">Práctica libre</p>
+        <p class="hud-estado" id="hud-estado" aria-live="polite">Libre</p>
         <div class="hud-acciones">
           <button class="chip-btn" type="button" id="btn-oleada">Oleada</button>
           <button class="chip-btn" type="button" id="btn-deshacer" disabled>Deshacer</button>
@@ -61,7 +61,6 @@
     </section>
 
     <section class="screen scroll" id="screen-progreso" data-screen="progreso" hidden></section>
-    <section class="screen scroll" id="screen-proyecto" data-screen="proyecto" hidden></section>
     <section class="screen scroll" id="screen-ajustes" data-screen="ajustes" hidden></section>
   </main>
 
@@ -73,10 +72,6 @@
     <button type="button" data-tab="progreso">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M6 16l4-5 3 3 5-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>Progreso</span>
-    </button>
-    <button type="button" data-tab="proyecto">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16M5 5h11l-2 3.5 2 3.5H5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>Fase</span>
     </button>
     <button type="button" data-tab="ajustes">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M5.5 18.5l1.8-1.8M16.7 7.3l1.8-1.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -130,6 +125,6 @@
   </div>
 
   <p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
-  <script type="module" src="js/app.js?v=0.2.0"></script>
+  <script type="module" src="js/app.js?v=0.2.1"></script>
 </body>
 </html>

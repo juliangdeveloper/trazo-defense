@@ -1,5 +1,5 @@
 export const APP_ID = "trazo-defense";
-export const APP_VERSION = "0.2.0";
+export const APP_VERSION = "0.2.1";
 export const SAVE_KEY = "trazo-defense.save";
 export const SAVE_VERSION = 2;
 export const CACHE_PREFIX = "trazo-defense-";
@@ -336,7 +336,6 @@ export const CAMINO = Object.freeze([
 export const PANTALLA = Object.freeze({
   JUGAR: "jugar",
   PROGRESO: "progreso",
-  PROYECTO: "proyecto",
   AJUSTES: "ajustes",
 });
 
@@ -357,7 +356,3 @@ export const CAPITULO_INFO = Object.freeze({
   }),
 });
 
-export const FASES_NOMBRE = Object.freeze(["Idea", "Definición", "Diseño", "Construcción", "Validación", "Lanzamiento"]);
-export const ESTADOS_NOMBRE = Object.freeze(["Pendiente", "En curso", "Bloqueada", "En revisión", "Completada"]);
-export const TIPOS_NOMBRE = Object.freeze({ proyecto: "Proyecto", area: "Área", recurso: "Recurso", archivo: "Archivo" });
-export const TOTAL_FASES = 6;
