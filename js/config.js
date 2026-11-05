@@ -1,27 +1,46 @@
 export const APP_ID = "trazo-defense";
-export const APP_VERSION = "0.1.14";
+export const APP_VERSION = "0.2.0";
 export const SAVE_KEY = "trazo-defense.save";
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 export const CACHE_PREFIX = "trazo-defense-";
+
+export const CAPITULO = Object.freeze({ UNO: 1, DOS: 2 });
 
 export const TECNICA = Object.freeze({
   LINEA: "linea",
   ELIPSE: "elipse",
   PERSPECTIVA: "perspectiva",
+  FLECHA: "flecha",
+  SALCHICHA: "salchicha",
+  CAJA2P: "caja2p",
 });
 
-export const TECNICAS = Object.freeze([TECNICA.LINEA, TECNICA.ELIPSE, TECNICA.PERSPECTIVA]);
+export const TECNICAS_CAPITULO = Object.freeze({
+  [CAPITULO.UNO]: Object.freeze([TECNICA.LINEA, TECNICA.ELIPSE, TECNICA.PERSPECTIVA]),
+  [CAPITULO.DOS]: Object.freeze([TECNICA.FLECHA, TECNICA.SALCHICHA, TECNICA.CAJA2P]),
+});
+
+export const TECNICAS = Object.freeze([
+  TECNICA.LINEA, TECNICA.ELIPSE, TECNICA.PERSPECTIVA,
+  TECNICA.FLECHA, TECNICA.SALCHICHA, TECNICA.CAJA2P,
+]);
 
 export const TORRE = Object.freeze({
-  [TECNICA.LINEA]: Object.freeze({ nombre: "Torre de línea", corto: "Línea", danoBase: 24, leccion: "Drawabox 1 · Líneas" }),
-  [TECNICA.ELIPSE]: Object.freeze({ nombre: "Torre de elipse", corto: "Elipse", danoBase: 30, leccion: "Drawabox 1 · Elipses" }),
-  [TECNICA.PERSPECTIVA]: Object.freeze({ nombre: "Torre de perspectiva", corto: "Perspectiva", danoBase: 60, leccion: "Drawabox 1 · Cajas" }),
+  [TECNICA.LINEA]: Object.freeze({ nombre: "Torre de línea", corto: "Línea", danoBase: 24, leccion: "Drawabox 1 · Líneas", capitulo: CAPITULO.UNO }),
+  [TECNICA.ELIPSE]: Object.freeze({ nombre: "Torre de elipse", corto: "Elipse", danoBase: 30, leccion: "Drawabox 1 · Elipses", capitulo: CAPITULO.UNO }),
+  [TECNICA.PERSPECTIVA]: Object.freeze({ nombre: "Torre de perspectiva", corto: "Perspectiva", danoBase: 60, leccion: "Drawabox 1 · Cajas", capitulo: CAPITULO.UNO }),
+  [TECNICA.FLECHA]: Object.freeze({ nombre: "Torre de flecha", corto: "Flecha", danoBase: 28, leccion: "Drawabox 2 · Flechas", capitulo: CAPITULO.DOS }),
+  [TECNICA.SALCHICHA]: Object.freeze({ nombre: "Torre de salchicha", corto: "Salchicha", danoBase: 34, leccion: "Drawabox 2 · Formas orgánicas", capitulo: CAPITULO.DOS }),
+  [TECNICA.CAJA2P]: Object.freeze({ nombre: "Torre de caja en 2 puntos", corto: "Caja 2p", danoBase: 64, leccion: "Drawabox · 250 cajas", capitulo: CAPITULO.DOS }),
 });
 
 export const METRICA_PRINCIPAL = Object.freeze({
   [TECNICA.LINEA]: Object.freeze({ clave: "desviacion_pct", etiqueta: "Desviación media", unidad: "%" }),
   [TECNICA.ELIPSE]: Object.freeze({ clave: "ajuste_pct", etiqueta: "Error de ajuste medio", unidad: "%" }),
   [TECNICA.PERSPECTIVA]: Object.freeze({ clave: "desvio_deg", etiqueta: "Convergencia al punto de fuga", unidad: "°" }),
+  [TECNICA.FLECHA]: Object.freeze({ clave: "suavidad_deg", etiqueta: "Temblor de la curva", unidad: "°" }),
+  [TECNICA.SALCHICHA]: Object.freeze({ clave: "eje_deg", etiqueta: "Alineación del eje menor", unidad: "°" }),
+  [TECNICA.CAJA2P]: Object.freeze({ clave: "desvio_deg", etiqueta: "Convergencia a los puntos de fuga", unidad: "°" }),
 });
 
 export const PUNTAJE = Object.freeze({
@@ -41,6 +60,20 @@ export const PUNTAJE = Object.freeze({
   PERSPECTIVA_RECTITUD_MAX_PCT: 8,
   PERSPECTIVA_CIERRE_MAX_PCT: 25,
   CUBO_LINEAS: 3,
+  FLECHA_BORDES: 2,
+  FLECHA_SUAVIDAD_MAX_DEG: 14,
+  FLECHA_ENCOGIMIENTO_MAX_PCT: 35,
+  FLECHA_SOLAPE_MAX_PCT: 40,
+  FLECHA_EXTREMOS_MAX_PCT: 18,
+  FLECHA_MUESTRAS: 24,
+  SALCHICHA_CONTORNOS: 2,
+  SALCHICHA_EJE_MAX_DEG: 18,
+  SALCHICHA_AJUSTE_MAX_PCT: 20,
+  SALCHICHA_SIMETRIA_MAX_PCT: 25,
+  CAJA2P_LINEAS: 4,
+  CAJA2P_DESVIO_MAX_DEG: 8,
+  CAJA2P_RECTITUD_MAX_PCT: 8,
+  CAJA2P_CIERRE_MAX_PCT: 25,
   TRAZO_MIN_PX: 20,
   FALLO_BAJO: 0.15,
 });
@@ -54,9 +87,16 @@ export const NIVEL = Object.freeze({
 });
 
 export const MINIMOS_CAPITULO = Object.freeze({
-  [TECNICA.LINEA]: Object.freeze({ trazos: 10, maximo: 6 }),
-  [TECNICA.ELIPSE]: Object.freeze({ trazos: 6, maximo: 12 }),
-  [TECNICA.PERSPECTIVA]: Object.freeze({ trazos: 6, maximo: 6 }),
+  [CAPITULO.UNO]: Object.freeze({
+    [TECNICA.LINEA]: Object.freeze({ trazos: 10, maximo: 6 }),
+    [TECNICA.ELIPSE]: Object.freeze({ trazos: 6, maximo: 12 }),
+    [TECNICA.PERSPECTIVA]: Object.freeze({ trazos: 6, maximo: 6 }),
+  }),
+  [CAPITULO.DOS]: Object.freeze({
+    [TECNICA.FLECHA]: Object.freeze({ trazos: 8, maximo: 10 }),
+    [TECNICA.SALCHICHA]: Object.freeze({ trazos: 6, maximo: 14 }),
+    [TECNICA.CAJA2P]: Object.freeze({ trazos: 6, maximo: 6 }),
+  }),
 });
 
 export const PUNTO_DEBIL = Object.freeze({
@@ -65,14 +105,19 @@ export const PUNTO_DEBIL = Object.freeze({
   FRONTALES: "frontales",
   SEGURIDAD: "seguridad",
   ELIPSE: "elipse",
+  VP1: "vp1",
+  VP2: "vp2",
+  CILINDRO: "cilindro",
+  INTERSECCION: "interseccion",
 });
 
 export const COMPARA = Object.freeze({ MENOR_O_IGUAL: "<=", MAYOR_O_IGUAL: ">=" });
 
-export const JEFE = Object.freeze({
+export const JEFE_CAP1 = Object.freeze({
   id: "guardian_fuga",
   nombre: "Guardián del Punto de Fuga",
   leccion: "Drawabox 1 · Cajas en perspectiva de un punto",
+  capitulo: CAPITULO.UNO,
   minimoHorizonte: 1,
   minimoFugantes: 4,
   minimoFrontales: 4,
@@ -92,6 +137,38 @@ export const JEFE = Object.freeze({
     Object.freeze({ id: PUNTO_DEBIL.ELIPSE, nombre: "Elipse", corto: "Elipse", texto: "la elipse en la cara frontal puntúa", media: false, unidad: "%", base: 55, paso: 5, limite: 80, compara: COMPARA.MAYOR_O_IGUAL }),
   ]),
 });
+
+export const JEFE_CAP2 = Object.freeze({
+  id: "golem_intersecciones",
+  nombre: "Gólem de Intersecciones",
+  leccion: "Drawabox 2 · Intersecciones",
+  capitulo: CAPITULO.DOS,
+  minimoVerticales: 2,
+  minimoFugantes: 4,
+  minimoCilindro: 2,
+  minimoInterseccion: 1,
+  rectitudSeguraPct: 4,
+  cilindroBarridoMinDeg: 240,
+  interseccionRectitudMinPct: 8,
+  vida: 360,
+  danoPuntoDebil: 22,
+  recompensaTinta: 40,
+  golpeMs: 220,
+  puntosDebiles: Object.freeze([
+    Object.freeze({ id: PUNTO_DEBIL.VP1, nombre: "Punto de fuga 1", corto: "VP1", texto: "tus líneas al VP1 se desvían", media: true, unidad: "°", base: 7, paso: -0.7, limite: 3.5, compara: COMPARA.MENOR_O_IGUAL }),
+    Object.freeze({ id: PUNTO_DEBIL.VP2, nombre: "Punto de fuga 2", corto: "VP2", texto: "tus líneas al VP2 se desvían", media: true, unidad: "°", base: 7, paso: -0.7, limite: 3.5, compara: COMPARA.MENOR_O_IGUAL }),
+    Object.freeze({ id: PUNTO_DEBIL.CILINDRO, nombre: "Cilindro", corto: "Cilindro", texto: "el cilindro puntúa", media: false, unidad: "%", base: 50, paso: 5, limite: 78, compara: COMPARA.MAYOR_O_IGUAL }),
+    Object.freeze({ id: PUNTO_DEBIL.INTERSECCION, nombre: "Intersección", corto: "Corte", texto: "la línea de intersección se acerca", media: false, unidad: "%", base: 45, paso: 5, limite: 75, compara: COMPARA.MAYOR_O_IGUAL }),
+    Object.freeze({ id: PUNTO_DEBIL.SEGURIDAD, nombre: "Seguridad", corto: "Seguridad", texto: "trazos seguros:", media: false, unidad: "%", base: 58, paso: 5, limite: 85, compara: COMPARA.MAYOR_O_IGUAL }),
+  ]),
+});
+
+export const JEFES = Object.freeze({
+  [CAPITULO.UNO]: JEFE_CAP1,
+  [CAPITULO.DOS]: JEFE_CAP2,
+});
+
+export const JEFE = JEFE_CAP1;
 
 export const DIMENSION = Object.freeze({
   PRECISION: "precision",
@@ -128,6 +205,7 @@ export const ATAQUE = Object.freeze({
   PRECISION_FUGA_MAX_DEG: 10,
   PRECISION_FRONTAL_MAX: 0.3,
   PRECISION_ELIPSE_MAX: 0.25,
+  PRECISION_INTER_MAX: 0.35,
   RECTITUD_MAX_PCT: 8,
   RECTITUD_ELIPSE_TEMBLOR_MAX_DEG: 12,
   SEGURIDAD_VARIACION_MAX: 0.8,
@@ -166,6 +244,21 @@ export const ESCENA_JEFE = Object.freeze({
   AZAR_BORDE: 0.06,
   AZAR_FUGA_X: Object.freeze([0.1, 0.9]),
   AZAR_SEPARACION: 0.1,
+});
+
+export const ESCENA_JEFE2 = Object.freeze({
+  RESERVA_MAX: 0.3,
+  HORIZONTE: Object.freeze([0.12, 0.22]),
+  VP_MARGEN: 0.06,
+  VP_SEPARACION_MIN: 0.45,
+  CENTRO: Object.freeze([0.38, 0.62]),
+  LADO: 0.28,
+  FONDO: 0.42,
+  CIL_RADIO: 0.11,
+  AZAR_HORIZONTE: Object.freeze([0.1, 0.24]),
+  AZAR_CENTRO_Y: Object.freeze([0.55, 0.72]),
+  AZAR_CENTRO_X: Object.freeze([0.32, 0.68]),
+  AZAR_EJE: Object.freeze([-0.55, 0.55]),
 });
 
 export const PALMA = Object.freeze({
@@ -253,35 +346,16 @@ export const MODO = Object.freeze({
   TUTORIAL: "tutorial",
 });
 
-export const PUNTO_FASE = Object.freeze({ HECHO: "hecho", PENDIENTE: "pendiente" });
-
-export const FASE_PUNTOS = Object.freeze([
-  Object.freeze({ texto: "Campo con camino, monstruos, base y oleadas", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Torre de línea medida: desviación, extremos, seguridad y repasos", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Torre de elipse medida: ajuste, cierre, temblor y cobertura", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Torre de perspectiva: cierras un cubo con 3 líneas hacia el punto de fuga, medidas en grados", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Jefe al final de la oleada, en el mismo campo, con barra de vida y 5 puntos débiles cuyas metas suben con tu nivel", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Demo animada del jefe con trazo fantasma y botón Ver demo", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Elipse inscrita en la cara frontal como punto débil del jefe", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Nivel por técnica desde promedios móviles, no por horas jugadas", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Curva de progreso por día y mínimos del capítulo 1", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Bonus de tinta en la primera oleada de cada día, sin rachas", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Las 3 torres desde el inicio y oleadas que mezclan técnicas", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Mejoras de torre: más daño o más objetivos, sin quitarle peso al trazo", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Cada 10 de tinta sube sola de nivel la torre más baja, y cambia de aspecto", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Campo vertical: los monstruos bajan hacia tu cuaderno y dibujas sobre el campo, entre ellos y la base", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Cámara lenta mientras dibujas y cola con los próximos ejercicios", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Tutorial inicial que se puede repetir", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Contra el jefe cada trazo es un ataque calificado en 5 dimensiones, con destello de anillos y ataque final al cerrar la caja", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Funciona sin conexión, en iPhone 13 mini y en iPad mini", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Calibrar umbrales con trazos reales", estado: PUNTO_FASE.PENDIENTE }),
-  Object.freeze({ texto: "Capítulos 2 en adelante: cajas rotadas, texturas y formas orgánicas", estado: PUNTO_FASE.PENDIENTE }),
-  Object.freeze({ texto: "Torre de gesto con poses de 30 segundos", estado: PUNTO_FASE.PENDIENTE }),
-  Object.freeze({ texto: "Jefes de proporción, valor, composición y color", estado: PUNTO_FASE.PENDIENTE }),
-  Object.freeze({ texto: "Preguntas de historia y estilos con repaso espaciado", estado: PUNTO_FASE.PENDIENTE }),
-  Object.freeze({ texto: "Presión del lápiz en la puntuación de las torres", estado: PUNTO_FASE.PENDIENTE }),
-  Object.freeze({ texto: "Sonido y animaciones finales", estado: PUNTO_FASE.PENDIENTE }),
-]);
+export const CAPITULO_INFO = Object.freeze({
+  [CAPITULO.UNO]: Object.freeze({
+    titulo: "Capítulo 1 · Drawabox",
+    resumen: "Líneas, elipses y cajas en un punto de fuga. Cumple los mínimos y el Guardián del Punto de Fuga aparece al final de cada oleada.",
+  }),
+  [CAPITULO.DOS]: Object.freeze({
+    titulo: "Capítulo 2 · Formas en el espacio",
+    resumen: "Flechas que se tuercen, salchichas con contornos y cajas en dos puntos de fuga. El Gólem de Intersecciones aparece al final cuando cumples los mínimos.",
+  }),
+});
 
 export const FASES_NOMBRE = Object.freeze(["Idea", "Definición", "Diseño", "Construcción", "Validación", "Lanzamiento"]);
 export const ESTADOS_NOMBRE = Object.freeze(["Pendiente", "En curso", "Bloqueada", "En revisión", "Completada"]);

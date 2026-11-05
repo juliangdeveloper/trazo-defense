@@ -1,4 +1,4 @@
-import { CAMINO, MONSTRUO, OLEADA, TORRE, PUNTAJE, MEJORA, MEZCLA, TECNICAS, JEFE, ATAQUE, NIVEL_ATAQUE } from "./config.js";
+import { CAMINO, MONSTRUO, OLEADA, TORRE, PUNTAJE, MEJORA, MEZCLA, TECNICAS, TECNICAS_CAPITULO, CAPITULO, JEFES, ATAQUE, NIVEL_ATAQUE } from "./config.js";
 
 export function largoCamino(camino = CAMINO) {
   let total = 0;
@@ -38,9 +38,10 @@ export function tipoMonstruo(id) {
   return Object.values(MONSTRUO).find((m) => m.id === id) || MONSTRUO.BORRON;
 }
 
-export function tecnicasOleada(cantidad, debil, numero = 1, peso = MEZCLA.PESO_DEBIL) {
-  const base = TECNICAS.includes(debil) ? debil : TECNICAS[0];
-  const otras = TECNICAS.filter((t) => t !== base);
+export function tecnicasOleada(cantidad, debil, numero = 1, peso = MEZCLA.PESO_DEBIL, tecnicas = TECNICAS) {
+  const listaTec = tecnicas && tecnicas.length ? tecnicas : TECNICAS;
+  const base = listaTec.includes(debil) ? debil : listaTec[0];
+  const otras = listaTec.filter((t) => t !== base);
   const lista = [];
   let siguienteOtra = Math.max(0, Math.floor(numero) - 1);
   for (let i = 0; i < cantidad; i++) {
@@ -50,9 +51,10 @@ export function tecnicasOleada(cantidad, debil, numero = 1, peso = MEZCLA.PESO_D
   return lista;
 }
 
-export function crearOleada(numero, debil, conJefe = false) {
+export function crearOleada(numero, debil, conJefe = false, tecnicasCap = null) {
   const tipos = composicionOleada(numero);
-  const tecnicas = tecnicasOleada(tipos.length, debil, numero);
+  const pool = tecnicasCap && tecnicasCap.length ? tecnicasCap : TECNICAS_CAPITULO[CAPITULO.UNO];
+  const tecnicas = tecnicasOleada(tipos.length, debil, numero, MEZCLA.PESO_DEBIL, pool);
   return {
     numero: Math.max(1, Math.floor(numero)),
     cola: tipos.map((tipo, i) => ({ tipo, tecnica: tecnicas[i] })),
@@ -65,6 +67,7 @@ export function crearOleada(numero, debil, conJefe = false) {
     tinta: 0,
     abonada: 0,
     conJefe: Boolean(conJefe),
+    capitulo: (tecnicasCap && tecnicasCap[0] && TORRE[tecnicasCap[0]]) ? TORRE[tecnicasCap[0]].capitulo : CAPITULO.UNO,
     jefe: null,
     terminada: false,
     ganada: false,
@@ -100,7 +103,7 @@ export function actualizarOleada(oleada, dtMs) {
     oleada.ganada = false;
   } else if (!oleada.cola.length && !oleada.vivos.length) {
     if (oleada.conJefe && !oleada.jefe) {
-      oleada.jefe = crearJefe(oleada.numero);
+      oleada.jefe = crearJefe(oleada.numero, oleada.capitulo || CAPITULO.UNO);
       return oleada;
     }
     if (oleada.jefe && oleada.jefe.vida > 0) {
@@ -114,9 +117,10 @@ export function actualizarOleada(oleada, dtMs) {
   return oleada;
 }
 
-export function crearJefe(numero) {
-  const vida = Math.round(JEFE.vida * multiplicadorVida(Math.max(1, Math.floor(numero))));
-  return { vida, vidaMax: vida, golpeMs: 0, rondas: 0 };
+export function crearJefe(numero, capitulo = CAPITULO.UNO) {
+  const jefe = JEFES[capitulo] || JEFES[CAPITULO.UNO];
+  const vida = Math.round(jefe.vida * multiplicadorVida(Math.max(1, Math.floor(numero))));
+  return { vida, vidaMax: vida, golpeMs: 0, rondas: 0, capitulo };
 }
 
 export function jefeActivo(oleada) {
@@ -136,8 +140,9 @@ export function danoAtaqueFinal(niveles) {
   return Math.round(ATAQUE.DANO_FINAL * multiplicadorDeNiveles(niveles));
 }
 
-export function danoPuntosDebiles(rotos) {
-  return Math.max(0, Math.floor(rotos)) * JEFE.danoPuntoDebil;
+export function danoPuntosDebiles(rotos, capitulo = CAPITULO.UNO) {
+  const jefe = JEFES[capitulo] || JEFES[CAPITULO.UNO];
+  return Math.max(0, Math.floor(rotos)) * jefe.danoPuntoDebil;
 }
 
 export function golpearJefe(oleada, dano) {
@@ -145,7 +150,8 @@ export function golpearJefe(oleada, dano) {
   if (!jefe || jefe.vida <= 0 || !(dano > 0)) return { dano: 0, vencido: false };
   const real = Math.min(jefe.vida, Math.round(dano));
   jefe.vida -= real;
-  jefe.golpeMs = JEFE.golpeMs;
+  const conf = JEFES[jefe.capitulo] || JEFES[CAPITULO.UNO];
+  jefe.golpeMs = conf.golpeMs;
   return { dano: real, vencido: jefe.vida <= 0 };
 }
 

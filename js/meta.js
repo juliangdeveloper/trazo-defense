@@ -13,8 +13,8 @@ export const PROYECTO = Object.freeze({
   fases_completadas: 3,
   tipo: TIPO_PROYECTO.PROYECTO,
   aportes: [
-    { stat: "Programación", exp: 36, fuente: "creacion" },
-    { stat: "Diseño", exp: 6, fuente: "creacion" },
+    { stat: "Programación", exp: 42, fuente: "creacion" },
+    { stat: "Diseño", exp: 8, fuente: "creacion" },
     { stat: "Dibujo", exp: 20, fuente: "uso" }
   ],
 });

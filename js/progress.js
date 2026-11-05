@@ -1,4 +1,4 @@
-import { TECNICA, TECNICAS, METRICA_PRINCIPAL, NIVEL, MINIMOS_CAPITULO, SESION, SAVE_VERSION, MEJORA } from "./config.js";
+import { TECNICA, TECNICAS, TECNICAS_CAPITULO, METRICA_PRINCIPAL, NIVEL, MINIMOS_CAPITULO, SESION, SAVE_VERSION, MEJORA, CAPITULO, TORRE } from "./config.js";
 import { TIPO_STAT } from "./meta.js";
 
 export const STATS = Object.freeze({
@@ -6,12 +6,16 @@ export const STATS = Object.freeze({
   oleadas_jugadas: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "oleadas jugadas" },
   oleadas_ganadas: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "oleadas ganadas" },
   monstruos_vencidos: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "monstruos vencidos" },
-  jefes_vencidos: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "victorias contra jefes" },
+  jefes_vencidos: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "victorias contra jefes del capítulo 1" },
+  jefes_cap2: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "victorias contra jefes del capítulo 2" },
   dias_practica: { tipo: TIPO_STAT.TOTAL_ACUMULADO, unidad: "días con al menos una oleada terminada, no seguidos" },
   mejor_puntaje_linea_pct: { tipo: TIPO_STAT.MEJOR_MARCA, unidad: "mejor puntaje de una línea, en porcentaje" },
   nivel_linea: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de líneas, 1 a 5" },
   nivel_elipse: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de elipses, 1 a 5" },
   nivel_perspectiva: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de perspectiva, 1 a 5" },
+  nivel_flecha: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de flechas, 1 a 5" },
+  nivel_salchicha: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de salchichas, 1 a 5" },
+  nivel_caja2p: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de cajas en 2 puntos, 1 a 5" },
   tinta: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "tinta disponible" },
   tutorial_completado: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "tutorial completado: 1 sí, 0 no" },
 });
@@ -24,6 +28,8 @@ export const LOGROS = Object.freeze([
   Object.freeze({ id: "elipse_nivel_3", cumple: (s) => s.nivel_elipse >= 3 }),
   Object.freeze({ id: "perspectiva_nivel_3", cumple: (s) => s.nivel_perspectiva >= 3 }),
   Object.freeze({ id: "jefe_punto_fuga", cumple: (s) => s.jefes_vencidos >= 1 }),
+  Object.freeze({ id: "flecha_nivel_3", cumple: (s) => s.nivel_flecha >= 3 }),
+  Object.freeze({ id: "jefe_intersecciones", cumple: (s) => s.jefes_cap2 >= 1 }),
   Object.freeze({ id: "dias_practica_7", cumple: (s) => s.dias_practica >= 7 }),
 ]);
 
@@ -41,7 +47,8 @@ export function estadoInicial() {
     recientes: mapaTecnicas(() => []),
     intentos: mapaTecnicas(() => 0),
     historial: mapaTecnicas(() => ({})),
-    contadores: { trazos: 0, oleadasJugadas: 0, oleadasGanadas: 0, monstruos: 0, jefes: 0, mejorLinea: 0, diasPractica: 0 },
+    contadores: { trazos: 0, oleadasJugadas: 0, oleadasGanadas: 0, monstruos: 0, jefes: 0, jefesCap2: 0, mejorLinea: 0, diasPractica: 0 },
+    capitulo: CAPITULO.UNO,
     ultimoBonus: "",
     tutorialVisto: false,
   };
@@ -55,9 +62,38 @@ function esObjeto(v) {
   return !!v && typeof v === "object" && !Array.isArray(v);
 }
 
-export function normalizarEstado(raw) {
+function migrarV1(raw) {
   const base = estadoInicial();
-  if (!esObjeto(raw) || raw.v !== SAVE_VERSION) return base;
+  base.tinta = Math.max(0, numero(raw.tinta, 0));
+  for (const t of [TECNICA.LINEA, TECNICA.ELIPSE, TECNICA.PERSPECTIVA]) {
+    base.mejoras[t] = Math.min(MEJORA.MAX, Math.max(0, Math.floor(numero(esObjeto(raw.mejoras) ? raw.mejoras[t] : 0, 0))));
+    const lista = esObjeto(raw.recientes) && Array.isArray(raw.recientes[t]) ? raw.recientes[t] : [];
+    base.recientes[t] = lista.filter((r) => esObjeto(r) && Number.isFinite(r.p) && Number.isFinite(r.m)).slice(-NIVEL.VENTANA);
+    base.intentos[t] = Math.max(0, numero(esObjeto(raw.intentos) ? raw.intentos[t] : 0, 0));
+    const hist = esObjeto(raw.historial) && esObjeto(raw.historial[t]) ? raw.historial[t] : {};
+    for (const dia of Object.keys(hist)) {
+      const d = hist[dia];
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dia) && esObjeto(d) && Number.isFinite(d.n) && Number.isFinite(d.suma) && d.n > 0) base.historial[t][dia] = { n: d.n, suma: d.suma };
+    }
+  }
+  if (esObjeto(raw.contadores)) {
+    for (const k of Object.keys(base.contadores)) {
+      if (k === "jefesCap2") continue;
+      base.contadores[k] = Math.max(0, numero(raw.contadores[k], 0));
+    }
+  }
+  base.ultimoBonus = typeof raw.ultimoBonus === "string" ? raw.ultimoBonus : "";
+  base.tutorialVisto = raw.tutorialVisto === true;
+  base.capitulo = CAPITULO.UNO;
+  if (capitulo2Desbloqueado(base)) base.capitulo = CAPITULO.DOS;
+  return base;
+}
+
+export function normalizarEstado(raw) {
+  if (!esObjeto(raw)) return estadoInicial();
+  if (raw.v === 1) return migrarV1(raw);
+  if (raw.v !== SAVE_VERSION) return estadoInicial();
+  const base = estadoInicial();
   base.tinta = Math.max(0, numero(raw.tinta, 0));
   for (const t of TECNICAS) {
     base.mejoras[t] = Math.min(MEJORA.MAX, Math.max(0, Math.floor(numero(esObjeto(raw.mejoras) ? raw.mejoras[t] : 0, 0))));
@@ -75,13 +111,21 @@ export function normalizarEstado(raw) {
   }
   base.ultimoBonus = typeof raw.ultimoBonus === "string" ? raw.ultimoBonus : "";
   base.tutorialVisto = raw.tutorialVisto === true;
+  const cap = numero(raw.capitulo, CAPITULO.UNO);
+  base.capitulo = cap === CAPITULO.DOS ? CAPITULO.DOS : CAPITULO.UNO;
+  if (base.capitulo === CAPITULO.DOS && !capitulo2Desbloqueado(base)) base.capitulo = CAPITULO.UNO;
   return base;
 }
 
 export function cargar(storage, clave) {
   try {
     const raw = storage.getItem(clave);
-    return normalizarEstado(raw ? JSON.parse(raw) : null);
+    const parsed = raw ? JSON.parse(raw) : null;
+    const estado = normalizarEstado(parsed);
+    if (parsed && typeof parsed === "object" && parsed.v !== estado.v) {
+      try { storage.setItem(clave, JSON.stringify(estado)); } catch (e) {}
+    }
+    return estado;
   } catch (e) {
     return estadoInicial();
   }
@@ -105,6 +149,10 @@ export function diaLocal(fecha) {
 function recortarHistorial(hist) {
   const dias = Object.keys(hist).sort();
   while (dias.length > NIVEL.DIAS_HISTORIAL) delete hist[dias.shift()];
+}
+
+export function tecnicasDe(capitulo) {
+  return TECNICAS_CAPITULO[capitulo] || TECNICAS_CAPITULO[CAPITULO.UNO];
 }
 
 export function registrarTrazo(estado, tecnica, resultado, fecha) {
@@ -146,14 +194,16 @@ export function nivelTecnica(estado, tecnica) {
   return nivelDesdePuntaje(prom.puntaje, prom.muestras);
 }
 
-export function nivelJugador(estado) {
-  const niveles = TECNICAS.map((t) => nivelTecnica(estado, t));
+export function nivelJugador(estado, capitulo = estado.capitulo) {
+  const lista = tecnicasDe(capitulo);
+  const niveles = lista.map((t) => nivelTecnica(estado, t));
   return Math.max(1, Math.floor(niveles.reduce((s, n) => s + n, 0) / niveles.length));
 }
 
-export function minimosCapitulo(estado) {
-  return TECNICAS.map((t) => {
-    const req = MINIMOS_CAPITULO[t];
+export function minimosCapitulo(estado, capitulo = estado.capitulo) {
+  const reqs = MINIMOS_CAPITULO[capitulo] || MINIMOS_CAPITULO[CAPITULO.UNO];
+  return tecnicasDe(capitulo).map((t) => {
+    const req = reqs[t];
     const prom = promedioMovil(estado, t);
     const trazos = estado.intentos[t];
     const cumple = trazos >= req.trazos && Number.isFinite(prom.metrica) && prom.metrica <= req.maximo;
@@ -161,14 +211,26 @@ export function minimosCapitulo(estado) {
   });
 }
 
-export function jefeDesbloqueado(estado) {
-  return minimosCapitulo(estado).every((m) => m.cumple);
+export function jefeDesbloqueado(estado, capitulo = estado.capitulo) {
+  return minimosCapitulo(estado, capitulo).every((m) => m.cumple);
 }
 
-export function tecnicaMasDebil(estado) {
-  let peor = TECNICA.LINEA;
+export function capitulo2Desbloqueado(estado) {
+  return estado.contadores.jefes >= 1 && jefeDesbloqueado(estado, CAPITULO.UNO);
+}
+
+export function elegirCapitulo(estado, capitulo) {
+  if (capitulo === CAPITULO.DOS && !capitulo2Desbloqueado(estado)) return false;
+  if (capitulo !== CAPITULO.UNO && capitulo !== CAPITULO.DOS) return false;
+  estado.capitulo = capitulo;
+  return true;
+}
+
+export function tecnicaMasDebil(estado, capitulo = estado.capitulo) {
+  const lista = tecnicasDe(capitulo);
+  let peor = lista[0];
   let peorValor = Infinity;
-  for (const t of TECNICAS) {
+  for (const t of lista) {
     const prom = promedioMovil(estado, t);
     const valor = prom.muestras < NIVEL.MUESTRAS_MIN ? -1 + prom.muestras / 100 : prom.puntaje;
     if (valor < peorValor) { peorValor = valor; peor = t; }
@@ -176,9 +238,9 @@ export function tecnicaMasDebil(estado) {
   return peor;
 }
 
-export function siguienteMejora(estado) {
+export function siguienteMejora(estado, capitulo = estado.capitulo) {
   let elegida = null;
-  for (const t of TECNICAS) {
+  for (const t of tecnicasDe(capitulo)) {
     const nivel = estado.mejoras[t] || 0;
     if (nivel >= MEJORA.MAX) continue;
     if (elegida === null || nivel < estado.mejoras[elegida]) elegida = t;
@@ -186,19 +248,19 @@ export function siguienteMejora(estado) {
   return elegida;
 }
 
-export function progresoTinta(estado) {
-  if (siguienteMejora(estado) === null) return null;
+export function progresoTinta(estado, capitulo = estado.capitulo) {
+  if (siguienteMejora(estado, capitulo) === null) return null;
   return Math.min(MEJORA.TINTA_POR_NIVEL - 1, Math.floor(estado.tinta));
 }
 
-export function subirConTinta(estado) {
+export function subirConTinta(estado, capitulo = estado.capitulo) {
   const subidas = [];
-  let t = siguienteMejora(estado);
+  let t = siguienteMejora(estado, capitulo);
   while (t !== null && estado.tinta >= MEJORA.TINTA_POR_NIVEL) {
     estado.tinta -= MEJORA.TINTA_POR_NIVEL;
     estado.mejoras[t] += 1;
     subidas.push({ tecnica: t, nivel: estado.mejoras[t] });
-    t = siguienteMejora(estado);
+    t = siguienteMejora(estado, capitulo);
   }
   return subidas;
 }
@@ -224,10 +286,14 @@ export function registrarOleada(estado, { ganada, monstruos, tinta }) {
   return estado;
 }
 
-export function registrarJefe(estado, vencido, recompensa) {
+export function registrarJefe(estado, vencido, recompensa, capitulo = CAPITULO.UNO) {
   if (!vencido) return estado;
-  estado.contadores.jefes += 1;
+  if (capitulo === CAPITULO.DOS) estado.contadores.jefesCap2 += 1;
+  else estado.contadores.jefes += 1;
   estado.tinta += Math.max(0, recompensa || 0);
+  if (capitulo === CAPITULO.UNO && capitulo2Desbloqueado(estado) && estado.capitulo === CAPITULO.UNO) {
+    estado.capitulo = CAPITULO.DOS;
+  }
   return estado;
 }
 
@@ -243,11 +309,15 @@ export function statsMeta(estado) {
     oleadas_ganadas: estado.contadores.oleadasGanadas,
     monstruos_vencidos: estado.contadores.monstruos,
     jefes_vencidos: estado.contadores.jefes,
+    jefes_cap2: estado.contadores.jefesCap2,
     dias_practica: estado.contadores.diasPractica,
     mejor_puntaje_linea_pct: estado.contadores.mejorLinea,
     nivel_linea: nivelTecnica(estado, TECNICA.LINEA),
     nivel_elipse: nivelTecnica(estado, TECNICA.ELIPSE),
     nivel_perspectiva: nivelTecnica(estado, TECNICA.PERSPECTIVA),
+    nivel_flecha: nivelTecnica(estado, TECNICA.FLECHA),
+    nivel_salchicha: nivelTecnica(estado, TECNICA.SALCHICHA),
+    nivel_caja2p: nivelTecnica(estado, TECNICA.CAJA2P),
     tinta: estado.tinta,
     tutorial_completado: estado.tutorialVisto ? 1 : 0,
   };
@@ -255,4 +325,8 @@ export function statsMeta(estado) {
 
 export function logrosDe(stats) {
   return LOGROS.filter((l) => l.cumple(stats)).map((l) => l.id);
+}
+
+export function nombreTorre(tecnica) {
+  return TORRE[tecnica] ? TORRE[tecnica].corto : tecnica;
 }

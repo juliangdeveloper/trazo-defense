@@ -4,26 +4,31 @@
 
 **[▶ Jugar ahora](https://juliangdeveloper.github.io/trazo-defense/)** · gratis, en el navegador, sin instalar
 
-<img src="docs/screenshot.png" alt="Partida de Trazo Defense: una elipse acaba de dañar a un monstruo con 27 de daño y abajo aparecen sus métricas" width="320">
+<img src="img/screenshot.png" alt="Partida de Trazo Defense con las torres del capítulo 2" width="320">
 
 ## Cómo se juega
 
 - Los monstruos salen por arriba y bajan hacia tu cuaderno, abajo. Dibujas sobre el campo, en la franja entre ellos y la base, y la torre activa dispara.
 - Mientras dibujas, los monstruos van en cámara lenta. «Luego» muestra los próximos ejercicios.
-- **Línea:** une los dos puntos de un solo trazo. Se mide desviación, extremos, repasos y velocidad.
-- **Elipse:** dibújala dentro de la caja. Se mide ajuste, cierre y temblor.
-- **Perspectiva:** cierra un cubo en perspectiva de un punto con 3 rectas hacia el punto de fuga. Se mide la convergencia en grados, el cierre en las esquinas y la rectitud.
-- Las tres torres están disponibles desde el inicio. En una oleada los monstruos mezclan técnicas y el que va primero elige la torre y el ejercicio.
+- **Capítulo 1**
+  - **Línea:** une los dos puntos. Se mide desviación, extremos, repasos y velocidad.
+  - **Elipse:** dibújala dentro de la caja. Se mide ajuste, cierre y temblor.
+  - **Perspectiva:** cierra un cubo en un punto de fuga con 3 rectas. Se mide convergencia, cierre y rectitud.
+- **Capítulo 2** (se abre al vencer al jefe del 1 y cumplir sus mínimos; puedes volver al 1 desde Progreso o Ajustes)
+  - **Flecha:** dibuja los dos bordes de una cinta que se curva y se encoge con la distancia. Se mide suavidad, encogimiento y solape.
+  - **Salchicha:** dibuja 2 elipses de contorno sobre la forma. Lo clave es que el eje menor de cada elipse siga el eje central.
+  - **Caja 2p:** cierra una caja rotada con 4 rectas hacia dos puntos de fuga. Se mide convergencia, cierre y rectitud.
+- Las tres torres del capítulo activo están disponibles desde el inicio. En una oleada los monstruos mezclan técnicas y el que va primero elige la torre y el ejercicio.
 - Mejor trazo, más daño. Cada resultado muestra sus métricas.
-- **Mejoras:** cada 10 de tinta la torre de menor nivel sube sola (empate: línea, elipse, perspectiva). Cada torre muestra su nivel y la tinta que lleva hacia la siguiente mejora, por ejemplo 7/10. Son 5 niveles que alternan más daño y más objetivos, y la torre cambia de aspecto. El daño sigue dependiendo del puntaje del trazo.
-- **Jefe:** con los mínimos del capítulo 1 cumplidos, aparece al final de cada oleada en el mismo campo, con una demo animada que se repite con «Ver demo». Dibujas horizonte, cara frontal, 4 líneas de fuga y una elipse dentro de la cara, guiado por el punto de fuga y el centro de la cara, que cambian de sitio en cada aparición. Cada línea y la elipse son un ataque. Vencerlo da 30 de tinta. Sin los mínimos, la oleada termina normal y te dice qué falta.
-- **Ataques al jefe:** cada ataque se califica en 5 dimensiones con 4 niveles (Débil, Bien, Fuerte, Perfecto): precisión respecto a su punto guía, rectitud (o curva pareja en la elipse), seguridad (un trazo continuo, a velocidad constante, sin repasos ni pausas), proporción (tamaño y ángulo para la cara y la perspectiva) y presión (constancia del lápiz; sin lápiz se estima con la velocidad). El daño crece con los niveles. Al cerrar la caja llega un ataque final que combina toda la caja, y cada uno de sus 5 puntos débiles roto (horizonte, líneas de fuga, cara frontal, seguridad y elipse) le quita más.
-- **Destello:** cada ataque lanza un destello de 5 anillos sobre el jefe, del centro hacia afuera precisión, rectitud, seguridad, proporción y presión. El color es el nivel: negro débil, rojo bien, ámbar fuerte y blanco brillante perfecto. Cuanto mejor el ataque, más halo y rayos. La leyenda se abre con el botón de anillos del campo o desde Ajustes.
-- La primera oleada que terminas cada día da tinta extra. No hay rachas ni se pierde nada.
+- **Mejoras:** cada 10 de tinta la torre de menor nivel del capítulo activo sube sola. Son 5 niveles que alternan más daño y más objetivos.
+- **Jefe cap. 1:** Guardián del Punto de Fuga. Horizonte, cara frontal, 4 fugas y una elipse. Demo con «Ver demo».
+- **Jefe cap. 2:** Gólem de Intersecciones. Caja en 2 puntos, cilindro que la atraviesa y la línea de intersección. Las guías (VPs y eje) cambian en cada aparición.
+- **Ataques al jefe:** cada ataque se califica en Precisión, Rectitud, Seguridad, Proporción y Presión (4 niveles). Al cerrar llega el ataque final y los puntos débiles rotos quitan más.
+- **Destello:** 5 anillos sobre el jefe; el color es el nivel. La leyenda está en el campo o en Ajustes.
+- La primera oleada que terminas cada día da tinta extra. No hay rachas.
 - El tutorial se puede repetir desde Ajustes.
-- Los trazos se dibujan con tinta suave. Con lápiz óptico el grosor sigue la presión; con dedo o ratón es uniforme. La medición usa siempre los puntos originales del trazo.
-- **Deshacer** quita el último trazo en práctica y contra el jefe, y devuelve la vida que ese ataque le quitó al jefe. En una oleada solo se deshacen trazos que no dañaron monstruos, y contra el jefe se bloquea al cerrar la caja.
-- Con lápiz óptico se ignoran los toques mientras dibuja y justo después, y los contactos grandes de la palma siempre. Si no usas lápiz, el dedo funciona normal.
+- Con lápiz óptico el grosor sigue la presión; la medición usa siempre los puntos originales del trazo.
+- **Deshacer** quita el último trazo en práctica y contra el jefe (devuelve la vida que ese ataque le quitó).
 
 ## Stack
 
