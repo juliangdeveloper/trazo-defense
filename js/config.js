@@ -1,5 +1,5 @@
 export const APP_ID = "trazo-defense";
-export const APP_VERSION = "0.3.0";
+export const APP_VERSION = "0.3.1";
 export const SAVE_KEY = "trazo-defense.save";
 export const SAVE_VERSION = 3;
 export const CACHE_PREFIX = "trazo-defense-";

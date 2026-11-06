@@ -209,6 +209,8 @@ export function ejercicioInterseccion(w, h, modo, rng = Math.random) {
     puntos: s.puntos.map((p) => ({ x: p.x, y: p.y })),
     hint: s.hint,
     forma: s.forma,
+    formaIdx: s.formaIdx ?? 0,
+    necesitaPerspectiva: Boolean(s.necesitaPerspectiva),
   }));
   return {
     tecnica: modo === "salchichas" ? TECNICA.SALCHICHAS : modo === "mixta" ? TECNICA.MIXTA : TECNICA.FORMAS,
@@ -248,6 +250,8 @@ export function escenaJefe2(w, h, arriba = 0, azar = null) {
     puntos: s.puntos.map((p) => ({ x: p.x, y: p.y + reserva })),
     hint: s.hint,
     forma: s.forma,
+    formaIdx: s.formaIdx ?? 0,
+    necesitaPerspectiva: Boolean(s.necesitaPerspectiva),
   }));
   return {
     horizonte: escena.horizonte + reserva,
@@ -260,5 +264,5 @@ export function escenaJefe2(w, h, arriba = 0, azar = null) {
 }
 
 export function trazosDemoJefe2(escena) {
-  return (escena.pasos || []).map((p) => ({ paso: p.tipo, puntos: p.puntos.map((q) => ({ x: q.x, y: q.y })) }));
+  return (escena.pasos || []).map((p) => ({ paso: p.hint || p.tipo, puntos: p.puntos.map((q) => ({ x: q.x, y: q.y })) }));
 }

@@ -23,7 +23,7 @@ import { crearImagenDestello, radioVisible } from "./destello.js";
 const COLOR = Object.freeze({
   TINTA: "#1f1d2b",
   TENUE: "#b9b3a6",
-  GUIA: "#9aa3e8",
+  GUIA: "#4f5cc4",
   ACENTO: "#4b5bd6",
   BIEN: "#2f8f5b",
   MAL: "#c0453a",
@@ -240,8 +240,8 @@ function textoPasoJefe() {
   if (estado.capitulo === CAPITULO.DOS) {
     const pasos = (ui.jefe.escena && ui.jefe.escena.pasos) || [];
     const hechos = ui.jefe.trazos.length;
-    if (hechos < pasos.length) return `Jefe · ${hechos + 1}/${pasos.length}. ${pasos[hechos].hint}`;
-    return "Jefe · Forma completa: mira los puntos débiles.";
+    if (hechos < pasos.length) return `${pasos[hechos].hint}. Trazo ${hechos + 1} de ${pasos.length}.`;
+    return "Listo: revisa los puntos débiles y cierra el ataque.";
   }
   const clas = clasificarTrazosJefe(ui.jefe.trazos, ui.jefe.escena.fuga);
   const falta = faltantesJefe(clas);
@@ -253,19 +253,42 @@ function textoPasoJefe() {
   return "Jefe · Caja completa: mira los puntos débiles.";
 }
 
-const PASO_DEMO = Object.freeze({ horizonte: "1. horizonte", cara: "2. cara frontal", fuga: "3. líneas de fuga", elipse: "4. elipse en la cara", vertical: "1. verticales", cilindro: "3. cilindro", interseccion: "4. intersección" });
+const PASO_DEMO = Object.freeze({
+  horizonte: "Mira: primero el horizonte",
+  cara: "Mira: la cara frontal de la caja",
+  fuga: "Mira: las líneas hacia el punto de fuga",
+  elipse: "Mira: la elipse dentro de la cara",
+});
+
+function textoDemoPaso(trazo) {
+  if (!trazo) return "Mira la demo";
+  if (PASO_DEMO[trazo.paso]) return PASO_DEMO[trazo.paso];
+  const hint = String(trazo.paso || "");
+  if (/caja|arista/i.test(hint)) return "Mira: primero las aristas de la caja";
+  if (/salchicha|silueta/i.test(hint)) return "Mira: el contorno de la salchicha";
+  if (/contorno|elipse|ecuador/i.test(hint)) return "Mira: este contorno";
+  if (/intersec|cruzan/i.test(hint)) return "Mira: dónde se cruzan las formas";
+  if (/cilindro/i.test(hint)) return "Mira: el cilindro";
+  if (/cono/i.test(hint)) return "Mira: el cono";
+  if (/esfera/i.test(hint)) return "Mira: la esfera";
+  if (/pirámide|piramide|cúspide|cuspide/i.test(hint)) return "Mira: la pirámide";
+  if (/base/i.test(hint)) return `Mira: ${hint}`;
+  return hint ? `Mira: ${hint}` : "Mira la demo";
+}
 
 function pintarPista() {
   const pista = $("#pad-hint");
   if (ui.jefe.activo) {
     const demo = estadoDemo();
-    pista.textContent = demo && demo.trazo ? `Demo · ${demo.trazo.paso}` : textoPasoJefe();
+    pista.textContent = demo && demo.trazo ? textoDemoPaso(demo.trazo) : textoPasoJefe();
     return;
   }
   const ej = ui.ejercicio;
   if (ej && ej.pasos) {
     const i = ej.hechos.length;
-    pista.textContent = i < ej.pasos.length ? `${ej.pasos[i].hint} ${i + 1}/${ej.pasos.length}.` : "Formas listas.";
+    const total = ej.pasos.length;
+    if (i >= total) { pista.textContent = "Formas listas."; return; }
+    pista.textContent = `${ej.pasos[i].hint}. Trazo ${i + 1} de ${total}.`;
     return;
   }
   const textos = {
@@ -274,7 +297,7 @@ function pintarPista() {
     [TECNICA.PERSPECTIVA]: "Cierra el cubo: 3 rectas de las esquinas negras hacia el punto de fuga.",
   };
   let texto = textos[ui.tecnica] || "";
-  if (ej && totalHechos(ej) > 1 && ej.tecnica === ui.tecnica) texto += ` ${ej.hechos.length}/${totalHechos(ej)}.`;
+  if (ej && totalHechos(ej) > 1 && ej.tecnica === ui.tecnica) texto += ` Trazo ${ej.hechos.length + 1} de ${totalHechos(ej)}.`;
   pista.textContent = texto;
 }
 
@@ -356,58 +379,79 @@ function trazarLibre(ctx, puntos, color, terminado = true) {
 
 function marcarVp(ctx, p, etiqueta) {
   if (!p) return;
+  ctx.save();
+  ctx.globalAlpha = 0.35;
   if (p.x < 8 || p.x > tamPad.w - 8) {
-    const x = p.x < 8 ? 14 : tamPad.w - 14;
-    ctx.fillStyle = COLOR.MAL;
+    const x = p.x < 8 ? 10 : tamPad.w - 10;
+    ctx.fillStyle = COLOR.TENUE;
     ctx.beginPath();
-    if (p.x < 8) { ctx.moveTo(x + 8, p.y - 7); ctx.lineTo(x - 1, p.y); ctx.lineTo(x + 8, p.y + 7); }
-    else { ctx.moveTo(x - 8, p.y - 7); ctx.lineTo(x + 1, p.y); ctx.lineTo(x - 8, p.y + 7); }
+    if (p.x < 8) { ctx.moveTo(x + 5, p.y - 4); ctx.lineTo(x, p.y); ctx.lineTo(x + 5, p.y + 4); }
+    else { ctx.moveTo(x - 5, p.y - 4); ctx.lineTo(x, p.y); ctx.lineTo(x - 5, p.y + 4); }
     ctx.closePath();
     ctx.fill();
+    ctx.restore();
     return;
   }
-  punto(ctx, p, 10, "rgba(192,69,58,0.14)");
-  punto(ctx, p, 4.5, COLOR.MAL);
+  punto(ctx, p, 3.2, COLOR.TENUE);
+  ctx.restore();
 }
 
-function pintarInterseccion(ctx, ej, mostrarIdeal) {
-  if (!ej || !ej.pasos) return;
+function formaActualDe(pasos, idx) {
+  if (!pasos || idx < 0 || idx >= pasos.length) return -1;
+  return pasos[idx].formaIdx ?? 0;
+}
+
+function pintarGuiasPerspectiva(ctx, ej, paso) {
+  if (!paso || !paso.necesitaPerspectiva) return;
   if (ej.horizonte != null) {
+    ctx.save();
+    ctx.globalAlpha = 0.28;
     ctx.strokeStyle = COLOR.TENUE;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, ej.horizonte);
     ctx.lineTo(tamPad.w, ej.horizonte);
     ctx.stroke();
+    ctx.restore();
   }
   marcarVp(ctx, ej.vp1, "VP1");
   marcarVp(ctx, ej.vp2, "VP2");
+}
+
+function pintarInterseccion(ctx, ej, mostrarIdeal) {
+  if (!ej || !ej.pasos) return;
   const hechas = new Set(ej.hechos.map((h) => h.paso));
   const actual = ej.hechos.length;
+  const formaAct = formaActualDe(ej.pasos, actual);
+  pintarGuiasPerspectiva(ctx, ej, ej.pasos[actual]);
   if (mostrarIdeal) {
     ctx.save();
-    ctx.globalAlpha = 0.18;
-    for (const paso of ej.pasos) trazar(ctx, paso.puntos, COLOR.TINTA, 2);
+    ctx.globalAlpha = 0.12;
+    for (const paso of ej.pasos) {
+      if ((paso.formaIdx ?? 0) === formaAct || actual >= ej.pasos.length) trazar(ctx, paso.puntos, COLOR.TINTA, 1.8);
+    }
     ctx.restore();
   }
   ej.pasos.forEach((paso, i) => {
     if (hechas.has(i)) return;
+    const mismo = (paso.formaIdx ?? 0) === formaAct;
     const activo = i === actual;
     ctx.save();
-    ctx.setLineDash(activo ? [7, 7] : [4, 5]);
-    ctx.globalAlpha = activo ? 1 : 0.45;
-    trazar(ctx, paso.puntos, paso.tipo === "interseccion" ? "#b7791f" : COLOR.GUIA, activo ? 2.4 : 1.6);
+    ctx.setLineDash(activo ? [8, 6] : [5, 6]);
+    ctx.globalAlpha = activo ? 1 : (mismo ? 0.45 : 0.16);
+    const color = paso.tipo === "interseccion" ? "#a16207" : COLOR.GUIA;
+    trazar(ctx, paso.puntos, color, activo ? 3.2 : 2.2);
     ctx.restore();
     if (activo && paso.puntos.length) {
-      punto(ctx, paso.puntos[0], 5.5, COLOR.ACENTO);
+      punto(ctx, paso.puntos[0], 6, COLOR.ACENTO);
       if (!paso.cerrado) punto(ctx, paso.puntos[paso.puntos.length - 1], 4.5, COLOR.TINTA, false);
       const mid = paso.puntos[Math.floor(paso.puntos.length / 2)];
       ctx.fillStyle = COLOR.ACENTO;
       ctx.beginPath();
-      ctx.arc(mid.x, mid.y, 9, 0, Math.PI * 2);
+      ctx.arc(mid.x, mid.y, 10, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = "#fff";
-      ctx.font = "bold 11px -apple-system, system-ui, sans-serif";
+      ctx.font = "bold 12px -apple-system, system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(String(i + 1), mid.x, mid.y + 0.5);
@@ -1449,8 +1493,7 @@ function pintarDemo(ctx) {
   ctx.restore();
   pad.dataset.demo = JSON.stringify({ hechos: d.hechos, total: d.trazos.length, paso: d.trazo ? d.trazo.paso : null, f: Math.round(d.f * 100) / 100 });
   const pista = $("#pad-hint");
-  const pasoTxt = d.trazo ? (PASO_DEMO[d.trazo.paso] || d.trazo.paso) : null;
-  const texto = pasoTxt ? `Demo · ${pasoTxt}` : (ui.jefe.activo ? textoPasoJefe() : "Ver demo");
+  const texto = d.trazo ? textoDemoPaso(d.trazo) : (ui.jefe.activo ? textoPasoJefe() : "Mira la demo");
   if (pista.textContent !== texto) pista.textContent = texto;
 }
 
@@ -1507,31 +1550,26 @@ function pintarVivoJefe(ctx) {
   if (ui.trazo) trazarLibre(ctx, ui.trazo, COLOR.TINTA, false);
   if (ui.demo) pintarDemo(ctx);
   if (estado.capitulo === CAPITULO.DOS) {
-    if (esc.horizonte != null) {
-      ctx.strokeStyle = COLOR.TENUE;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, esc.horizonte);
-      ctx.lineTo(tamPad.w, esc.horizonte);
-      ctx.stroke();
-    }
-    marcarVp(ctx, esc.vp1, "VP1");
-    marcarVp(ctx, esc.vp2, "VP2");
     const pasos = esc.pasos || [];
     const hechos = ui.jefe.trazos.length;
+    const formaAct = formaActualDe(pasos, hechos);
+    pintarGuiasPerspectiva(ctx, esc, pasos[hechos]);
     ctx.save();
-    ctx.globalAlpha = 0.16;
-    for (const paso of pasos) trazar(ctx, paso.puntos, COLOR.TINTA, 2);
+    ctx.globalAlpha = 0.1;
+    for (const paso of pasos) {
+      if ((paso.formaIdx ?? 0) === formaAct) trazar(ctx, paso.puntos, COLOR.TINTA, 1.6);
+    }
     ctx.restore();
     pasos.forEach((paso, i) => {
       if (i < hechos) return;
+      const mismo = (paso.formaIdx ?? 0) === formaAct;
       const activo = i === hechos;
       ctx.save();
-      ctx.setLineDash(activo ? [7, 7] : [4, 5]);
-      ctx.globalAlpha = activo ? 1 : 0.4;
-      trazar(ctx, paso.puntos, paso.tipo === "interseccion" ? "#b7791f" : COLOR.GUIA, activo ? 2.4 : 1.5);
+      ctx.setLineDash(activo ? [8, 6] : [5, 6]);
+      ctx.globalAlpha = activo ? 1 : (mismo ? 0.4 : 0.14);
+      trazar(ctx, paso.puntos, paso.tipo === "interseccion" ? "#a16207" : COLOR.GUIA, activo ? 3.2 : 2.2);
       ctx.restore();
-      if (activo && paso.puntos[0]) punto(ctx, paso.puntos[0], 5.5, COLOR.ACENTO);
+      if (activo && paso.puntos[0]) punto(ctx, paso.puntos[0], 6, COLOR.ACENTO);
     });
     return;
   }
@@ -2113,6 +2151,7 @@ if (!metaRead(APP_ID)) escritorMeta.pedir();
 metaDeclararProyecto(APP_ID, APP_VERSION);
 
 requestAnimationFrame(bucle);
+
 if (!estado.tutorialVisto) abrirTutorial();
 
 if ("serviceWorker" in navigator) {

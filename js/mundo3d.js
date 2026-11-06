@@ -41,14 +41,14 @@ function basisFromAxis(axis) {
 }
 
 export function crearCamara(w, h, rng = Math.random) {
-  const yaw = entre(rng, -18, 18) * DEG;
-  const pitch = entre(rng, -10, -4) * DEG;
-  const dist = entre(rng, 4.4, 5.2);
-  const sceneYaw = entre(rng, -38, 38) * DEG;
-  const eye = add(v3(0, 1.45, 0), rotY(v3(0, 0, dist), yaw));
-  eye.y = 1.45 + Math.sin(pitch) * 0.4;
-  const target = v3(0, 0.5, 0);
-  const fov = 38 * DEG;
+  const yaw = entre(rng, -14, 14) * DEG;
+  const pitch = entre(rng, -8, -3) * DEG;
+  const dist = entre(rng, 3.2, 3.8);
+  const sceneYaw = entre(rng, -32, 32) * DEG;
+  const eye = add(v3(0, 1.2, 0), rotY(v3(0, 0, dist), yaw));
+  eye.y = 1.2 + Math.sin(pitch) * 0.35;
+  const target = v3(0, 0.45, 0);
+  const fov = 42 * DEG;
   const forward = norm(sub(target, eye));
   const right = norm(cross(forward, v3(0, 1, 0)));
   const up = cross(right, forward);
@@ -369,27 +369,67 @@ function suavizarCadena(pts, pasadas = 2) {
   return cur;
 }
 
+function quitarOutliers(pts) {
+  if (pts.length < 6) return pts;
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = out[out.length - 1], b = pts[i], c = pts[i + 1];
+    const ab = Math.hypot(b.x - a.x, b.y - a.y);
+    const bc = Math.hypot(c.x - b.x, c.y - b.y);
+    const ac = Math.hypot(c.x - a.x, c.y - a.y);
+    if (ab + bc > ac * 1.85 && ab > 14) continue;
+    out.push(b);
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+
+function densificarSpline(pts, porSegmento = 4) {
+  if (pts.length < 3) return pts.slice();
+  const out = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+    for (let k = 0; k < porSegmento; k++) {
+      const t = k / porSegmento;
+      const t2 = t * t, t3 = t2 * t;
+      out.push({
+        x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+        y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
+        z: p1.z,
+      });
+    }
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+
 export function interseccionFormas(formA, formB, cam, eps = 0.055) {
   const hits = [];
-  for (const p of sampleSurface(formA, 2200)) {
+  for (const p of sampleSurface(formA, 2400)) {
     if (Math.abs(distToForm(p, formB)) <= eps) hits.push(p);
   }
-  for (const p of sampleSurface(formB, 2200)) {
+  for (const p of sampleSurface(formB, 2400)) {
     if (Math.abs(distToForm(p, formA)) <= eps) hits.push(p);
   }
   if (hits.length < 12) return [];
   const kept = [];
   for (const p of hits) {
-    if (kept.every((q) => len(sub(p, q)) > 0.028)) kept.push(p);
-    if (kept.length > 120) break;
+    if (kept.every((q) => len(sub(p, q)) > 0.03)) kept.push(p);
+    if (kept.length > 100) break;
   }
   const proj = proyectarPoly(cam, kept);
   if (proj.length < 8) return [];
-  let chain = chainScreen(proj, Math.max(20, cam.w * 0.07));
+  let chain = chainScreen(proj, Math.max(18, cam.w * 0.065));
   if (chain.length < 8) return [];
-  chain = suavizarCadena(chain, 3);
+  chain = quitarOutliers(chain);
+  chain = suavizarCadena(chain, 4);
+  chain = densificarSpline(chain, 3);
+  chain = suavizarCadena(chain, 2);
   const a = chain[0], b = chain[chain.length - 1];
-  if (Math.hypot(a.x - b.x, a.y - b.y) < 22) chain.push({ x: a.x, y: a.y, z: a.z });
+  if (Math.hypot(a.x - b.x, a.y - b.y) < 24) chain.push({ x: a.x, y: a.y, z: a.z });
   return chain;
 }
 
@@ -406,35 +446,49 @@ function randomAxis(rng) {
   return norm(v3(Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw)));
 }
 
-function crearForma(tipo, rng, slot = 0, sceneYaw = 0) {
-  const base = v3(entre(rng, -0.65, 0.65), entre(rng, 0.3, 0.95), entre(rng, -0.5, 0.5));
+function slotCentro(slot, total, rng) {
+  if (total <= 2) {
+    const x = slot === 0 ? entre(rng, -0.35, -0.05) : entre(rng, 0.05, 0.35);
+    return v3(x, entre(rng, 0.35, 0.7), entre(rng, -0.2, 0.2));
+  }
+  const arc = [
+    v3(-0.55, 0.42, 0.05),
+    v3(-0.12, 0.72, -0.08),
+    v3(0.42, 0.55, 0.1),
+    v3(0.08, 0.28, -0.05),
+  ];
+  const base = arc[slot % arc.length];
+  return v3(base.x + entre(rng, -0.06, 0.06), base.y + entre(rng, -0.05, 0.05), base.z + entre(rng, -0.06, 0.06));
+}
+
+function crearForma(tipo, rng, slot = 0, sceneYaw = 0, total = 2) {
+  const base = slotCentro(slot, total, rng);
   if (tipo === PRIMITIVA.CAJA) {
-    const s = entre(rng, 0.5, 0.78);
-    return { tipo, c: base, sx: s, sy: s * entre(rng, 0.75, 1.05), sz: s * entre(rng, 0.75, 1.05), yaw: sceneYaw };
+    const s = entre(rng, 0.7, 1.05);
+    return { tipo, c: base, sx: s, sy: s * entre(rng, 0.75, 1.05), sz: s * entre(rng, 0.75, 1.05), yaw: sceneYaw, slot };
   }
   if (tipo === PRIMITIVA.ESFERA) {
-    return { tipo, c: base, r: entre(rng, 0.26, 0.4) };
+    return { tipo, c: base, r: entre(rng, 0.38, 0.55), slot };
   }
   if (tipo === PRIMITIVA.CILINDRO) {
     const axis = randomAxis(rng);
-    return { tipo, c: base, axis, r: entre(rng, 0.16, 0.26), h: entre(rng, 0.65, 1.05) };
+    return { tipo, c: base, axis, r: entre(rng, 0.22, 0.34), h: entre(rng, 0.85, 1.25), slot };
   }
   if (tipo === PRIMITIVA.CONO) {
     const axis = randomAxis(rng);
-    const h = entre(rng, 0.7, 1.1);
+    const h = entre(rng, 0.9, 1.3);
     const apex = add(base, mul(axis, -h * 0.35));
-    return { tipo, apex, axis, r: entre(rng, 0.2, 0.32), h, c: base };
+    return { tipo, apex, axis, r: entre(rng, 0.28, 0.42), h, c: base, slot };
   }
   if (tipo === PRIMITIVA.PIRAMIDE) {
-    const s = entre(rng, 0.5, 0.78);
-    return { tipo, c: base, sx: s, sy: s * entre(rng, 0.85, 1.15), sz: s, yaw: sceneYaw };
+    const s = entre(rng, 0.7, 1.05);
+    return { tipo, c: base, sx: s, sy: s * entre(rng, 0.85, 1.15), sz: s, yaw: sceneYaw, slot };
   }
-  const flat = norm(rotY(v3(entre(rng, 0.6, 1), 0, entre(rng, -0.5, 0.5)), sceneYaw + entre(rng, -0.4, 0.4)));
-  const flat2 = norm(v3(flat.x, entre(rng, -0.15, 0.25), flat.z));
-  const largo = entre(rng, 0.85, 1.35);
-  const r = entre(rng, 0.15, 0.23);
-  const c = v3(entre(rng, -0.5, 0.5), entre(rng, 0.22, 0.8), entre(rng, -0.4, 0.4));
-  return { tipo: PRIMITIVA.SALCHICHA, a: add(c, mul(flat2, -largo / 2)), b: add(c, mul(flat2, largo / 2)), r, c };
+  const flat = norm(rotY(v3(entre(rng, 0.6, 1), 0, entre(rng, -0.5, 0.5)), sceneYaw + entre(rng, -0.35, 0.35)));
+  const flat2 = norm(v3(flat.x, entre(rng, -0.12, 0.22), flat.z));
+  const largo = entre(rng, 1.1, 1.55);
+  const r = entre(rng, 0.2, 0.3);
+  return { tipo: PRIMITIVA.SALCHICHA, a: add(base, mul(flat2, -largo / 2)), b: add(base, mul(flat2, largo / 2)), r, c: base, slot };
 }
 
 function nudgeTogether(a, b) {
@@ -452,15 +506,15 @@ function nudgeTogether(a, b) {
   shiftForm(b, mix(cb, mid, 0.7));
 }
 
-function strokesForForm(form, cam) {
+function strokesForForm(form, cam, formaIdx = 0) {
   const strokes = [];
   const hintNombre = {
-    [PRIMITIVA.CAJA]: "Dibuja la caja",
-    [PRIMITIVA.CILINDRO]: "Dibuja el cilindro",
-    [PRIMITIVA.CONO]: "Dibuja el cono",
-    [PRIMITIVA.ESFERA]: "Dibuja la esfera",
-    [PRIMITIVA.PIRAMIDE]: "Dibuja la pirámide",
-    [PRIMITIVA.SALCHICHA]: "Dibuja la salchicha",
+    [PRIMITIVA.CAJA]: "Traza la caja",
+    [PRIMITIVA.CILINDRO]: "Traza el cilindro",
+    [PRIMITIVA.CONO]: "Traza el cono",
+    [PRIMITIVA.ESFERA]: "Traza la esfera",
+    [PRIMITIVA.PIRAMIDE]: "Traza la pirámide",
+    [PRIMITIVA.SALCHICHA]: "Traza la salchicha",
   };
   if (form.tipo === PRIMITIVA.CAJA) {
     const c = boxCorners(form.c, form.sx, form.sy, form.sz, form.yaw);
@@ -473,7 +527,7 @@ function strokesForForm(form, cam) {
         tipo: "arista",
         cerrado: false,
         puntos: pts,
-        hint: first ? hintNombre[form.tipo] : "Sigue la arista de la caja",
+        hint: first ? hintNombre[form.tipo] : "Sigue esta arista",
         forma: form.tipo,
       });
       first = false;
@@ -484,8 +538,8 @@ function strokesForForm(form, cam) {
     const b = add(form.c, mul(f, form.h / 2));
     const e0 = proyectarPoly(cam, circle3(a, form.axis, form.r, 48));
     const e1 = proyectarPoly(cam, circle3(b, form.axis, form.r, 48));
-    strokes.push({ tipo: "elipse", cerrado: true, puntos: e0, hint: "Dibuja la elipse cercana del cilindro", forma: form.tipo });
-    strokes.push({ tipo: "elipse", cerrado: true, puntos: e1, hint: "Dibuja la elipse lejana del cilindro", forma: form.tipo });
+    strokes.push({ tipo: "elipse", cerrado: true, puntos: e0, hint: "Elipse cercana del cilindro", forma: form.tipo });
+    strokes.push({ tipo: "elipse", cerrado: true, puntos: e1, hint: "Elipse lejana del cilindro", forma: form.tipo });
     const toCam = norm(sub(cam.eye, form.c));
     const side = norm(cross(f, toCam));
     for (const sign of [-1, 1]) {
@@ -497,20 +551,20 @@ function strokesForForm(form, cam) {
     const { f } = basisFromAxis(form.axis);
     const base = add(form.apex, mul(f, form.h));
     const el = proyectarPoly(cam, circle3(base, form.axis, form.r, 48));
-    strokes.push({ tipo: "elipse", cerrado: true, puntos: el, hint: "Dibuja la base del cono", forma: form.tipo });
+    strokes.push({ tipo: "elipse", cerrado: true, puntos: el, hint: "Base del cono", forma: form.tipo });
     const toCam = norm(sub(cam.eye, mix(form.apex, base, 0.5)));
     const side = norm(cross(f, toCam));
     for (const sign of [-1, 1]) {
       const p = add(base, mul(side, form.r * sign));
-      strokes.push({ tipo: "arista", cerrado: false, puntos: proyectarPoly(cam, [form.apex, p]), hint: "Lleva el borde hasta la punta", forma: form.tipo });
+      strokes.push({ tipo: "arista", cerrado: false, puntos: proyectarPoly(cam, [form.apex, p]), hint: "Borde hasta la punta", forma: form.tipo });
     }
   } else if (form.tipo === PRIMITIVA.ESFERA) {
     const toCam = norm(sub(cam.eye, form.c));
     const sil = proyectarPoly(cam, circle3(form.c, toCam, form.r, 56));
-    strokes.push({ tipo: "elipse", cerrado: true, puntos: sil, hint: "Dibuja el contorno de la esfera", forma: form.tipo });
+    strokes.push({ tipo: "elipse", cerrado: true, puntos: sil, hint: "Contorno de la esfera", forma: form.tipo });
     const eqAxis = Math.abs(toCam.y) < 0.8 ? v3(0, 1, 0) : v3(1, 0, 0);
     const eq = proyectarPoly(cam, circle3(form.c, eqAxis, form.r * 0.92, 48));
-    strokes.push({ tipo: "elipse", cerrado: true, puntos: eq, hint: "Añade un ecuador de contorno", forma: form.tipo });
+    strokes.push({ tipo: "elipse", cerrado: true, puntos: eq, hint: "Ecuador de contorno", forma: form.tipo });
   } else if (form.tipo === PRIMITIVA.PIRAMIDE) {
     const apex = add(form.c, rotY(v3(0, form.sy / 2, 0), form.yaw));
     const base = [
@@ -554,7 +608,7 @@ function strokesForForm(form, cam) {
     for (const t of [0.33, 0.67]) {
       const c = mix(form.a, form.b, t);
       const el = proyectarPoly(cam, circle3(c, axis, form.r, 40));
-      strokes.push({ tipo: "contorno", cerrado: true, puntos: el, hint: "Dibuja el contorno sobre la salchicha", forma: form.tipo });
+      strokes.push({ tipo: "contorno", cerrado: true, puntos: el, hint: "Contorno sobre la salchicha", forma: form.tipo });
     }
   }
   return strokes;
@@ -571,8 +625,8 @@ function escenaValida(cam, formas, strokes) {
   if (pts.length < 8) return false;
   if (!enCampo(pts, cam.w, cam.h, 0.04)) return false;
   const box = bboxSpan(pts);
-  if (box.w < cam.w * 0.32 || box.h < cam.h * 0.22) return false;
-  if (box.w > cam.w * 0.96 || box.h > cam.h * 0.9) return false;
+  if (box.w < cam.w * 0.55 || box.h < cam.h * 0.4) return false;
+  if (box.w > cam.w * 0.94 || box.h > cam.h * 0.9) return false;
   if (formas.length <= 2) {
     if (formas.length === 2 && !formsIntersect(formas[0], formas[1])) return false;
     return true;
@@ -594,56 +648,98 @@ function escenaValida(cam, formas, strokes) {
 }
 
 function emparejar(formas, rng) {
-  for (let i = 0; i < formas.length; i++) {
-    for (let j = i + 1; j < formas.length; j++) {
-      if (!formsIntersect(formas[i], formas[j])) nudgeTogether(formas[i], formas[j]);
+  if (formas.length <= 2) {
+    if (formas.length === 2 && !formsIntersect(formas[0], formas[1])) nudgeTogether(formas[0], formas[1]);
+    return;
+  }
+  for (let i = 0; i < formas.length - 1; i++) {
+    if (!formsIntersect(formas[i], formas[i + 1])) nudgeTogether(formas[i], formas[i + 1]);
+  }
+}
+
+function encuadrarStrokes(strokes, cam, fill = 0.78) {
+  const pts = allProjectedPoints(strokes);
+  if (pts.length < 2) return null;
+  const box = bboxSpan(pts);
+  if (!(box.w > 1 && box.h > 1)) return null;
+  const cx = (box.minX + box.maxX) * 0.5;
+  const cy = (box.minY + box.maxY) * 0.5;
+  const sx = (cam.w * fill) / box.w;
+  const sy = (cam.h * fill) / box.h;
+  const s = Math.min(sx, sy);
+  const tx = cam.w * 0.5;
+  const ty = cam.h * 0.52;
+  for (const st of strokes) {
+    for (const p of st.puntos) {
+      p.x = (p.x - cx) * s + tx;
+      p.y = (p.y - cy) * s + ty;
     }
   }
+  return { cx, cy, s, tx, ty };
+}
+
+function aplicarEncuadre(p, xf) {
+  if (!p || !xf) return p;
+  return { x: (p.x - xf.cx) * xf.s + xf.tx, y: (p.y - xf.cy) * xf.s + xf.ty };
+}
+
+function tagStroke(st, formaIdx) {
+  st.formaIdx = formaIdx;
+  st.necesitaPerspectiva = st.forma === "caja" || st.forma === "piramide";
+  return st;
 }
 
 export function generarEscena(cam, tipos, rng = Math.random, intentos = 70) {
   for (let n = 0; n < intentos; n++) {
-    const formas = tipos.map((t, i) => crearForma(t, rng, i, cam.sceneYaw || 0));
+    const formas = tipos.map((t, i) => crearForma(t, rng, i, cam.sceneYaw || 0, tipos.length));
     emparejar(formas, rng);
     let strokes = [];
-    for (const f of formas) strokes.push(...strokesForForm(f, cam));
+    for (let i = 0; i < formas.length; i++) {
+      for (const s of strokesForForm(formas[i], cam, i)) strokes.push(tagStroke(s, i));
+    }
     if (formas.length >= 3 && strokes.length > 16) {
       const keep = [];
-      let aristasCaja = 0;
+      const porForma = {};
       for (const s of strokes) {
         if (s.forma === "caja" && s.tipo === "arista") {
-          aristasCaja += 1;
-          if (aristasCaja > 8) continue;
+          porForma[s.formaIdx] = (porForma[s.formaIdx] || 0) + 1;
+          if (porForma[s.formaIdx] > 8) continue;
         }
         keep.push(s);
       }
       strokes = keep;
     }
     const cortes = [];
-    for (let i = 0; i < formas.length; i++) {
-      for (let j = i + 1; j < formas.length; j++) {
-        const poly = interseccionFormas(formas[i], formas[j], cam);
-        if (poly.length >= 6) {
-          cortes.push({
-            tipo: "interseccion",
-            cerrado: false,
-            puntos: poly,
-            hint: "Ahora la línea donde se cruzan",
-            forma: "interseccion",
-            a: i,
-            b: j,
-          });
-        }
+    const pares = formas.length <= 2
+      ? [[0, 1]]
+      : Array.from({ length: formas.length - 1 }, (_, i) => [i, i + 1]);
+    for (const [i, j] of pares) {
+      if (j >= formas.length) continue;
+      const poly = interseccionFormas(formas[i], formas[j], cam);
+      if (poly.length >= 8) {
+        cortes.push(tagStroke({
+          tipo: "interseccion",
+          cerrado: false,
+          puntos: poly,
+          hint: "Línea donde se cruzan",
+          forma: "interseccion",
+          a: i,
+          b: j,
+        }, Math.max(i, j)));
       }
     }
     if (!cortes.length) continue;
-    cortes.sort((a, b) => b.puntos.length - a.puntos.length);
-    const maxCortes = formas.length <= 2 ? 2 : Math.min(4, cortes.length);
-    const cortesOk = cortes.slice(0, maxCortes).filter((c) => c.puntos.length >= 8);
-    if (!cortesOk.length) continue;
-    const todos = [...strokes, ...cortesOk];
+    const todos = [...strokes, ...cortes];
+    const xf = encuadrarStrokes(todos, cam, formas.length >= 3 ? 0.76 : 0.8);
     if (!escenaValida(cam, formas, todos)) continue;
     const vps = vanishingPoints(cam);
+    if (xf) {
+      vps.vp1 = aplicarEncuadre(vps.vp1, xf);
+      vps.vp2 = aplicarEncuadre(vps.vp2, xf);
+      vps.horizonte = (vps.vp1.y + vps.vp2.y) * 0.5;
+      vps.vp1.y = vps.horizonte;
+      vps.vp2.y = vps.horizonte;
+    }
     return { formas, strokes: todos, ...vps, cam };
   }
   return null;
@@ -659,11 +755,13 @@ export function tipificarTorre(modo, rng = Math.random) {
     return [a, b];
   }
   if (modo === "mixta") return [PRIMITIVA.SALCHICHA, elegir(rng, PRIMITIVAS_FORMAS)];
-  const pool = [...PRIMITIVAS_FORMAS, PRIMITIVA.SALCHICHA, PRIMITIVA.SALCHICHA];
-  const out = [];
-  for (let i = 0; i < 4; i++) out.push(elegir(rng, pool));
-  if (!out.includes(PRIMITIVA.SALCHICHA)) out[0] = PRIMITIVA.SALCHICHA;
-  if (out.every((t) => t === PRIMITIVA.SALCHICHA)) out[1] = elegir(rng, PRIMITIVAS_FORMAS);
+  const out = [PRIMITIVA.SALCHICHA, elegir(rng, PRIMITIVAS_FORMAS), elegir(rng, PRIMITIVAS_FORMAS), elegir(rng, [...PRIMITIVAS_FORMAS, PRIMITIVA.SALCHICHA])];
+  let guard = 0;
+  while (out[1] === out[2] && guard++ < 8) out[2] = elegir(rng, PRIMITIVAS_FORMAS);
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const tmp = out[i]; out[i] = out[j]; out[j] = tmp;
+  }
   return out;
 }
 
