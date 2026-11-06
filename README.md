@@ -15,15 +15,15 @@
   - **Línea:** une los dos puntos. Se mide desviación, extremos, repasos y velocidad.
   - **Elipse:** dibújala dentro de la caja. Se mide ajuste, cierre y temblor.
   - **Perspectiva:** cierra un cubo en un punto de fuga con 3 rectas. Se mide convergencia, cierre y rectitud.
-- **Capítulo 2** (cámbialo cuando quieras con el selector Cap. 1 / Cap. 2 arriba en Jugar; el jefe del 2 pide sus propios mínimos)
-  - **Flecha:** dibuja los dos bordes de una cinta que se curva y se encoge con la distancia. Se mide suavidad, encogimiento y solape.
-  - **Salchicha:** dibuja 2 elipses de contorno sobre la forma. Lo clave es que el eje menor de cada elipse siga el eje central.
-  - **Caja 2p:** cierra una caja rotada con 4 rectas hacia dos puntos de fuga. Se mide convergencia, cierre y rectitud.
+- **Capítulo 2 · Intersecciones** (cámbialo cuando quieras con el selector Cap. 1 / Cap. 2 arriba en Jugar; el jefe del 2 pide sus propios mínimos)
+  - **Salchichas:** dos salchichas que se cruzan al azar. Sigue siluetas, contornos y la línea de contacto.
+  - **Formas:** dos primitivas geométricas (caja, cilindro, cono, esfera o pirámide) en un mismo espacio de 2 puntos. Dibuja cada forma a través y luego la intersección.
+  - **Mixta:** una salchicha y una primitiva geométrica compartiendo espacio.
 - Las tres torres del capítulo activo están disponibles desde el inicio. En una oleada los monstruos mezclan técnicas y el que va primero elige la torre y el ejercicio.
 - Mejor trazo, más daño. Cada resultado muestra sus métricas.
 - **Mejoras:** cada 10 de tinta la torre de menor nivel del capítulo activo sube sola. Son 5 niveles que alternan más daño y más objetivos.
 - **Jefe cap. 1:** Guardián del Punto de Fuga. Horizonte, cara frontal, 4 fugas y una elipse. Demo con «Ver demo».
-- **Jefe cap. 2:** Gólem de Intersecciones. Caja en 2 puntos, cilindro que la atraviesa y la línea de intersección. Las guías (VPs y eje) cambian en cada aparición.
+- **Jefe cap. 2:** Gólem de Intersecciones. Cuatro formas aleatorias (salchichas y primitivas) en un mismo espacio de 2 puntos. Guías numeradas, «Ver demo» y puntos débiles por tipo de trazo.
 - **Ataques al jefe:** cada ataque se califica en Precisión, Rectitud, Seguridad, Proporción y Presión (4 niveles). Al cerrar llega el ataque final y los puntos débiles rotos quitan más.
 - **Destello:** 5 anillos sobre el jefe; el color es el nivel. La leyenda está en el campo o en Ajustes.
 - La primera oleada que terminas cada día da tinta extra. No hay rachas.

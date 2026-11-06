@@ -6,7 +6,7 @@ import {
 import { metaUpdate, metaRead, crearEscritor, metaDeclararProyecto } from "./meta.js";
 import {
   evaluarLinea, evaluarElipse, evaluarFugante, asignarArista, resumenCubo, evaluarJefe, clasificarTrazosJefe, faltantesJefe, cuentaJefe, CUPO_JEFE, TIPO_TRAZO_JEFE, calificarAtaque, combinarAtaques,
-  evaluarBordeFlecha, resumenFlecha, asignarBorde, evaluarContornoSalchicha, resumenSalchicha, resumenCaja2p,
+  evaluarGuia, resumenInterseccion, asignarPaso,
   clasificarTrazosJefe2, faltantesJefe2, cuentaJefe2, CUPO_JEFE2, TIPO_TRAZO_JEFE2, evaluarJefe2, calificarAtaque2,
 } from "./geometry.js";
 import {
@@ -193,11 +193,9 @@ function abonarTinta(cantidad) {
 }
 
 function totalHechos(ej) {
-  if (!ej) return 0;
+  if (!ej) return 1;
   if (ej.tecnica === TECNICA.PERSPECTIVA) return PUNTAJE.CUBO_LINEAS;
-  if (ej.tecnica === TECNICA.FLECHA) return PUNTAJE.FLECHA_BORDES;
-  if (ej.tecnica === TECNICA.SALCHICHA) return PUNTAJE.SALCHICHA_CONTORNOS;
-  if (ej.tecnica === TECNICA.CAJA2P) return PUNTAJE.CAJA2P_LINEAS;
+  if (ej.pasos) return ej.pasos.length;
   return 1;
 }
 
@@ -240,13 +238,9 @@ function nuevoEjercicio(forzar = false) {
 
 function textoPasoJefe() {
   if (estado.capitulo === CAPITULO.DOS) {
-    const clas = clasificarTrazosJefe2(ui.jefe.trazos, ui.jefe.escena);
-    const falta = faltantesJefe2(clas);
-    const n = cuentaJefe2(clas);
-    if (falta.verticales) return `Jefe · 1. Verticales de la caja (${n.verticales}/${JEFE_CAP2.minimoVerticales}).`;
-    if (falta.fugantes) return `Jefe · 2. Rectas a los dos puntos de fuga rojos (${n.fugantes1 + n.fugantes2}/${JEFE_CAP2.minimoFugantes}).`;
-    if (falta.cilindros) return `Jefe · 3. Cilindro que atraviesa la caja: 2 elipses de extremo (${n.cilindros}/${JEFE_CAP2.minimoCilindro}).`;
-    if (falta.intersecciones) return "Jefe · 4. Traza la línea donde el cilindro corta la caja.";
+    const pasos = (ui.jefe.escena && ui.jefe.escena.pasos) || [];
+    const hechos = ui.jefe.trazos.length;
+    if (hechos < pasos.length) return `Jefe · ${hechos + 1}/${pasos.length}. ${pasos[hechos].hint}`;
     return "Jefe · Forma completa: mira los puntos débiles.";
   }
   const clas = clasificarTrazosJefe(ui.jefe.trazos, ui.jefe.escena.fuga);
@@ -265,19 +259,21 @@ function pintarPista() {
   const pista = $("#pad-hint");
   if (ui.jefe.activo) {
     const demo = estadoDemo();
-    pista.textContent = demo && demo.trazo ? `Demo · ${PASO_DEMO[demo.trazo.paso]}` : textoPasoJefe();
+    pista.textContent = demo && demo.trazo ? `Demo · ${demo.trazo.paso}` : textoPasoJefe();
+    return;
+  }
+  const ej = ui.ejercicio;
+  if (ej && ej.pasos) {
+    const i = ej.hechos.length;
+    pista.textContent = i < ej.pasos.length ? `${ej.pasos[i].hint} ${i + 1}/${ej.pasos.length}.` : "Formas listas.";
     return;
   }
   const textos = {
     [TECNICA.LINEA]: "Une los dos puntos en un solo trazo seguro.",
     [TECNICA.ELIPSE]: "Elipse que toque los 4 lados de la caja y cierre.",
     [TECNICA.PERSPECTIVA]: "Cierra el cubo: 3 rectas de las esquinas negras hacia el punto de fuga.",
-    [TECNICA.FLECHA]: "Dibuja los dos bordes de la cinta, del extremo cercano al lejano.",
-    [TECNICA.SALCHICHA]: "Dibuja las 2 elipses de contorno; su eje menor sigue el eje de la forma.",
-    [TECNICA.CAJA2P]: "Cierra la caja: 4 rectas desde la arista vertical hacia los dos puntos de fuga.",
   };
   let texto = textos[ui.tecnica] || "";
-  const ej = ui.ejercicio;
   if (ej && totalHechos(ej) > 1 && ej.tecnica === ui.tecnica) texto += ` ${ej.hechos.length}/${totalHechos(ej)}.`;
   pista.textContent = texto;
 }
@@ -286,9 +282,9 @@ const ICONO_TECNICA = Object.freeze({
   [TECNICA.LINEA]: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18L19 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
   [TECNICA.ELIPSE]: '<svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="8.5" ry="5.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>',
   [TECNICA.PERSPECTIVA]: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10h9v9H4zM4 10l5-5h9l-5 5M13 19l5-5V5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
-  [TECNICA.FLECHA]: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16c4-1 6-6 8-8 2 3 4 6 8 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M16 10l4 3-4 1" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
-  [TECNICA.SALCHICHA]: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12c0-3 2-5 4-5h4c2 0 4 2 4 5s-2 5-4 5h-4c-2 0-4-2-4-5z" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="10" cy="12" rx="1.6" ry="3" fill="none" stroke="currentColor" stroke-width="1.6"/><ellipse cx="14" cy="12" rx="1.6" ry="3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
-  [TECNICA.CAJA2P]: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v10M12 8l-6 3v10l6-3 6 3V11z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="4" cy="6" r="1.4" fill="currentColor"/><circle cx="20" cy="6" r="1.4" fill="currentColor"/></svg>',
+  [TECNICA.SALCHICHAS]: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9c0-2 1.5-3.5 3.5-3.5h3c2 0 3.5 1.5 3.5 3.5S12.5 12.5 10.5 12.5h-3C5.5 12.5 4 11 4 9z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 14.5c0-2 1.5-3.5 3.5-3.5h3c2 0 3.5 1.5 3.5 3.5S17.5 18 15.5 18h-3C10.5 18 9 16.5 9 14.5z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>',
+  [TECNICA.FORMAS]: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16V8l6-3 6 3v8l-6 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="14" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+  [TECNICA.MIXTA]: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13c0-2.2 1.8-4 4-4h3c2.2 0 4 1.8 4 4s-1.8 4-4 4H8c-2.2 0-4-1.8-4-4z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M13 7l5 2.5v6L13 18z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
 });
 
 function colaActual() {
@@ -358,91 +354,66 @@ function trazarLibre(ctx, puntos, color, terminado = true) {
   ctx.fill();
 }
 
-function pintarFlecha(ctx, ej, mostrarIdeal) {
-  ctx.setLineDash([5, 5]);
-  trazar(ctx, ej.centro, COLOR.TENUE, 1.2);
-  ctx.setLineDash([]);
-  if (mostrarIdeal) {
-    ctx.setLineDash([6, 6]);
-    for (const b of ej.bordes) trazar(ctx, b, COLOR.GUIA, 2);
-    ctx.setLineDash([]);
-  }
-  const hechas = ej.hechos.map((x) => x.borde);
-  ej.bordes.forEach((b, i) => {
-    if (hechas.includes(i)) return;
-    punto(ctx, b[0], 5, COLOR.ACENTO);
-    punto(ctx, b[b.length - 1], 4, COLOR.TINTA, false);
-  });
-  for (const x of ej.hechos) trazarLibre(ctx, x.puntos, colorPuntaje(x.r.puntaje));
-}
-
-function pintarSalchicha(ctx, ej, mostrarIdeal) {
-  ctx.strokeStyle = COLOR.TENUE;
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([5, 5]);
-  ctx.beginPath();
-  ctx.arc(ej.a.x, ej.a.y, ej.radio, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(ej.b.x, ej.b.y, ej.radio, 0, Math.PI * 2);
-  ctx.stroke();
-  const nx = -ej.eje.y;
-  const ny = ej.eje.x;
-  trazar(ctx, [
-    { x: ej.a.x + nx * ej.radio, y: ej.a.y + ny * ej.radio },
-    { x: ej.b.x + nx * ej.radio, y: ej.b.y + ny * ej.radio },
-  ], COLOR.TENUE, 1.5);
-  trazar(ctx, [
-    { x: ej.a.x - nx * ej.radio, y: ej.a.y - ny * ej.radio },
-    { x: ej.b.x - nx * ej.radio, y: ej.b.y - ny * ej.radio },
-  ], COLOR.TENUE, 1.5);
-  ctx.setLineDash([3, 4]);
-  trazar(ctx, [ej.a, ej.b], COLOR.GUIA, 1.2);
-  ctx.setLineDash([]);
-  const hechas = ej.hechos.map((x) => x.contorno);
-  ej.contornos.forEach((c, i) => {
-    ctx.strokeStyle = hechas.includes(i) ? COLOR.BIEN : COLOR.ACENTO;
-    ctx.lineWidth = 1.6;
-    ctx.setLineDash(hechas.includes(i) ? [] : [4, 4]);
+function marcarVp(ctx, p, etiqueta) {
+  if (!p) return;
+  if (p.x < 8 || p.x > tamPad.w - 8) {
+    const x = p.x < 8 ? 14 : tamPad.w - 14;
+    ctx.fillStyle = COLOR.MAL;
     ctx.beginPath();
-    ctx.ellipse(c.cx, c.cy, c.rx, c.ry, Math.atan2(c.eje.y, c.eje.x), 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  });
-  for (const x of ej.hechos) trazarLibre(ctx, x.puntos, colorPuntaje(x.r.puntaje));
+    if (p.x < 8) { ctx.moveTo(x + 8, p.y - 7); ctx.lineTo(x - 1, p.y); ctx.lineTo(x + 8, p.y + 7); }
+    else { ctx.moveTo(x - 8, p.y - 7); ctx.lineTo(x + 1, p.y); ctx.lineTo(x - 8, p.y + 7); }
+    ctx.closePath();
+    ctx.fill();
+    return;
+  }
+  punto(ctx, p, 10, "rgba(192,69,58,0.14)");
+  punto(ctx, p, 4.5, COLOR.MAL);
 }
 
-function pintarCaja2p(ctx, ej, mostrarIdeal) {
-  ctx.strokeStyle = COLOR.TENUE;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, ej.horizonte);
-  ctx.lineTo(tamPad.w, ej.horizonte);
-  ctx.stroke();
-  punto(ctx, ej.vp1, 5, COLOR.MAL);
-  punto(ctx, ej.vp2, 5, COLOR.MAL);
-  ctx.fillStyle = COLOR.TENUE;
-  ctx.font = ETIQUETA_HORIZONTE.FUENTE;
-  ctx.fillText("VP1", ej.vp1.x + 8, ej.vp1.y - 6);
-  ctx.fillText("VP2", ej.vp2.x - 28, ej.vp2.y - 6);
-  trazar(ctx, ej.vertical, COLOR.TINTA, 2.2);
+function pintarInterseccion(ctx, ej, mostrarIdeal) {
+  if (!ej || !ej.pasos) return;
+  if (ej.horizonte != null) {
+    ctx.strokeStyle = COLOR.TENUE;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, ej.horizonte);
+    ctx.lineTo(tamPad.w, ej.horizonte);
+    ctx.stroke();
+  }
+  marcarVp(ctx, ej.vp1, "VP1");
+  marcarVp(ctx, ej.vp2, "VP2");
+  const hechas = new Set(ej.hechos.map((h) => h.paso));
+  const actual = ej.hechos.length;
   if (mostrarIdeal) {
-    ctx.setLineDash([5, 6]);
-    for (const a of ej.aristas) trazar(ctx, [a.desde, a.hasta], COLOR.GUIA, 1.5);
-    ctx.setLineDash([]);
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    for (const paso of ej.pasos) trazar(ctx, paso.puntos, COLOR.TINTA, 2);
+    ctx.restore();
   }
-  const hechas = ej.hechos.map((x) => x.arista);
-  ej.aristas.forEach((a, i) => {
-    if (hechas.includes(i)) return;
-    punto(ctx, a.desde, 4.5, COLOR.TINTA);
-    punto(ctx, a.hasta, 4, COLOR.ACENTO, false);
+  ej.pasos.forEach((paso, i) => {
+    if (hechas.has(i)) return;
+    const activo = i === actual;
+    ctx.save();
+    ctx.setLineDash(activo ? [7, 7] : [4, 5]);
+    ctx.globalAlpha = activo ? 1 : 0.45;
+    trazar(ctx, paso.puntos, paso.tipo === "interseccion" ? "#b7791f" : COLOR.GUIA, activo ? 2.4 : 1.6);
+    ctx.restore();
+    if (activo && paso.puntos.length) {
+      punto(ctx, paso.puntos[0], 5.5, COLOR.ACENTO);
+      if (!paso.cerrado) punto(ctx, paso.puntos[paso.puntos.length - 1], 4.5, COLOR.TINTA, false);
+      const mid = paso.puntos[Math.floor(paso.puntos.length / 2)];
+      ctx.fillStyle = COLOR.ACENTO;
+      ctx.beginPath();
+      ctx.arc(mid.x, mid.y, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 11px -apple-system, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(i + 1), mid.x, mid.y + 0.5);
+    }
   });
-  for (const x of ej.hechos) trazarLibre(ctx, x.puntos, colorPuntaje(x.r.puntaje));
-  const f = ej.fondo;
-  if (ej.hechos.length >= PUNTAJE.CAJA2P_LINEAS) {
-    trazar(ctx, [f.a1, f.b1], COLOR.TINTA, 1.5);
-    trazar(ctx, [f.a2, f.b2], COLOR.TINTA, 1.5);
-  }
+  for (const h of ej.hechos) trazarLibre(ctx, h.puntos, colorPuntaje(h.r.puntaje));
 }
 
 function pintarEjercicio(ctx, ej, mostrarIdeal) {
@@ -472,12 +443,8 @@ function pintarEjercicio(ctx, ej, mostrarIdeal) {
     }
   } else if (ej.tecnica === TECNICA.PERSPECTIVA) {
     pintarCubo(ctx, ej, mostrarIdeal);
-  } else if (ej.tecnica === TECNICA.FLECHA) {
-    pintarFlecha(ctx, ej, mostrarIdeal);
-  } else if (ej.tecnica === TECNICA.SALCHICHA) {
-    pintarSalchicha(ctx, ej, mostrarIdeal);
-  } else if (ej.tecnica === TECNICA.CAJA2P) {
-    pintarCaja2p(ctx, ej, mostrarIdeal);
+  } else if (ej.pasos) {
+    pintarInterseccion(ctx, ej, mostrarIdeal);
   }
 }
 
@@ -686,13 +653,17 @@ function pintarLectura(r, dano) {
   if (!r.valido) { el.append(chip("Trazo", "muy corto", "mal")); return; }
   const clase = r.puntaje >= 0.7 ? "bien" : r.puntaje < 0.4 ? "mal" : "";
   el.append(chip("Puntaje", `${Math.round(r.puntaje * 100)}%`, clase));
-  if (r.desviacion_pct !== undefined) {
+  if (r.suavidad_deg !== undefined && r.encogimiento_pct === undefined && r.seguridad_pct === undefined) {
+    if (r.linea) el.append(chip("Paso", `${r.linea}/${r.total || "?"}`));
+    el.append(chip("Desviación", `${fmt(r.desviacion_pct)}%`), chip("Extremos", `${fmt(r.extremos_pct)}%`), chip("Suavidad", `${fmt(r.suavidad_deg)}°`));
+    if (r.cierre_pct) el.append(chip("Cierre", `${fmt(r.cierre_pct)}%`));
+  } else if (r.desviacion_pct !== undefined && r.seguridad_pct !== undefined) {
     el.append(chip("Desviación", `${fmt(r.desviacion_pct)}%`), chip("Extremos", `${fmt(r.extremos_pct)}%`), chip("Seguridad", `${r.seguridad_pct}%`), chip("Repasos", String(r.repasos), r.repasos ? "mal" : ""));
   } else if (r.suavidad_deg !== undefined && r.encogimiento_pct !== undefined) {
-    if (r.bordes) el.append(chip("Bordes", `${r.bordes}/${PUNTAJE.FLECHA_BORDES}`));
+    if (r.total) el.append(chip("Pasos", `${r.total}`));
     el.append(chip("Suavidad", `${fmt(r.suavidad_deg)}°`), chip("Encogimiento", `${fmt(r.encogimiento_pct)}%`), chip("Solape", `${fmt(r.solape_pct)}%`));
   } else if (r.eje_deg !== undefined && r.simetria_pct !== undefined) {
-    if (r.contornos) el.append(chip("Contornos", `${r.contornos}/${PUNTAJE.SALCHICHA_CONTORNOS}`));
+    
     el.append(chip("Eje", `${fmt(r.eje_deg)}°`), chip("Ajuste", `${fmt(r.ajuste_pct)}%`), chip("Simetría", `${fmt(r.simetria_pct)}%`));
   } else if (r.ajuste_pct !== undefined) {
     el.append(chip("Ajuste", `${fmt(r.ajuste_pct)}%`), chip("Cierre", `${fmt(r.cierre_pct)}%`), chip("Temblor", `${fmt(r.temblor_deg)}°`), chip("Vuelta", `${r.cobertura_deg}°`, r.cobertura_deg < 330 ? "mal" : ""));
@@ -790,39 +761,12 @@ function terminarTrazoCubo(ej, puntos) {
   pintarHud();
 }
 
-function terminarTrazoFlecha(ej, puntos) {
-  const usadas = ej.hechos.map((x) => x.borde);
-  const indice = asignarBorde(puntos, ej.bordes, usadas);
-  const r = indice >= 0 ? evaluarBordeFlecha(puntos, ej.bordes[indice], ej.anchoCerca, ej.anchoLejos) : { valido: false, puntaje: 0 };
-  return terminarMulti(ej, puntos, r, indice, "borde", PUNTAJE.FLECHA_BORDES, () => {
-    const pts = [null, null];
-    for (const h of ej.hechos) pts[h.borde] = h.puntos;
-    return resumenFlecha(ej.hechos.map((x) => x.r), ej.bordes[0], ej.bordes[1], pts[0], pts[1]);
-  }, (parcial) => `Suavidad ${fmt(parcial.suavidad_deg)}° · ${Math.round(parcial.puntaje * 100)}%`);
-}
-
-function terminarTrazoSalchicha(ej, puntos) {
-  const usadas = ej.hechos.map((x) => x.contorno);
-  let indice = -1;
-  let mejor = Infinity;
-  ej.contornos.forEach((c, i) => {
-    if (usadas.includes(i)) return;
-    const cx = puntos.reduce((s, p) => s + p.x, 0) / puntos.length;
-    const cy = puntos.reduce((s, p) => s + p.y, 0) / puntos.length;
-    const d = Math.hypot(cx - c.cx, cy - c.cy);
-    if (d < mejor) { mejor = d; indice = i; }
-  });
-  const r = indice >= 0 ? evaluarContornoSalchicha(puntos, ej.contornos[indice]) : { valido: false, puntaje: 0 };
-  return terminarMulti(ej, puntos, r, indice, "contorno", PUNTAJE.SALCHICHA_CONTORNOS, () => resumenSalchicha(ej.hechos.map((x) => x.r)), (parcial) => `Eje ${fmt(parcial.eje_deg)}° · ${Math.round(parcial.puntaje * 100)}%`);
-}
-
-function terminarTrazoCaja2p(ej, puntos) {
-  const usadas = ej.hechos.map((x) => x.arista);
-  const indice = asignarArista(puntos, ej.aristas, usadas);
-  const arista = indice >= 0 ? ej.aristas[indice] : null;
-  const vp = arista ? (arista.vp === 1 ? ej.vp1 : ej.vp2) : null;
-  const r = arista ? evaluarFugante(puntos, arista, vp) : { valido: false, puntaje: 0 };
-  return terminarMulti(ej, puntos, r, indice, "arista", PUNTAJE.CAJA2P_LINEAS, () => ({ ...resumenCaja2p(ej.hechos.map((x) => x.r)), total: PUNTAJE.CAJA2P_LINEAS }), (parcial) => `Convergencia ${fmt(parcial.desvio_deg)}° · ${Math.round(parcial.puntaje * 100)}%`);
+function terminarTrazoInterseccion(ej, puntos) {
+  const usadas = ej.hechos.map((x) => x.paso);
+  const indice = asignarPaso(puntos, ej.pasos, usadas);
+  const paso = indice >= 0 ? ej.pasos[indice] : null;
+  const r = paso ? evaluarGuia(puntos, paso.puntos, paso.cerrado) : { valido: false, puntaje: 0, desviacion_pct: 100 };
+  return terminarMulti(ej, puntos, r, indice, "paso", ej.pasos.length, () => resumenInterseccion(ej.hechos.map((x) => x.r)), (parcial) => `Guía ${fmt(parcial.desviacion_pct)}% · ${Math.round(parcial.puntaje * 100)}%`);
 }
 
 function terminarMulti(ej, puntos, r, indice, clave, total, resumir, textoParcial) {
@@ -884,18 +828,8 @@ function terminarTrazo(puntos) {
     if (ui.redimPendiente) { ui.redimPendiente = false; redimensionar(); }
     return;
   }
-  if (ej.tecnica === TECNICA.FLECHA) {
-    terminarTrazoFlecha(ej, puntos);
-    if (ui.redimPendiente) { ui.redimPendiente = false; redimensionar(); }
-    return;
-  }
-  if (ej.tecnica === TECNICA.SALCHICHA) {
-    terminarTrazoSalchicha(ej, puntos);
-    if (ui.redimPendiente) { ui.redimPendiente = false; redimensionar(); }
-    return;
-  }
-  if (ej.tecnica === TECNICA.CAJA2P) {
-    terminarTrazoCaja2p(ej, puntos);
+  if (ej.pasos) {
+    terminarTrazoInterseccion(ej, puntos);
     if (ui.redimPendiente) { ui.redimPendiente = false; redimensionar(); }
     return;
   }
@@ -1035,9 +969,9 @@ const ICONO_TORRE = Object.freeze({
   [TECNICA.LINEA]: '<path d="M17 31L31 17"/>',
   [TECNICA.ELIPSE]: '<ellipse cx="24" cy="24" rx="9" ry="6"/>',
   [TECNICA.PERSPECTIVA]: '<path d="M16 21h9v9h-9zM16 21l5-5h9l-5 5M25 30l5-5v-9"/>',
-  [TECNICA.FLECHA]: '<path d="M14 30c4-2 6-8 8-12 2 4 4 8 10 6"/><path d="M28 20l4 3-4 1"/>',
-  [TECNICA.SALCHICHA]: '<ellipse cx="24" cy="24" rx="11" ry="6"/><ellipse cx="20" cy="24" rx="2" ry="4"/><ellipse cx="28" cy="24" rx="2" ry="4"/>',
-  [TECNICA.CAJA2P]: '<path d="M24 16v14M24 16l-8 4v14l8-4 8 4V20z"/>',
+  [TECNICA.SALCHICHAS]: '<path d="M10 18c0-4 3-7 7-7h4c4 0 7 3 7 7s-3 7-7 7h-4c-4 0-7-3-7-7z"/><path d="M18 28c0-4 3-7 7-7h3c4 0 7 3 7 7s-3 7-7 7h-3c-4 0-7-3-7-7z"/>',
+  [TECNICA.FORMAS]: '<path d="M12 34V14l12-6 12 6v20l-12 6z"/><circle cx="34" cy="24" r="8"/>',
+  [TECNICA.MIXTA]: '<path d="M8 26c0-5 4-9 9-9h6c5 0 9 4 9 9s-4 9-9 9h-6c-5 0-9-4-9-9z"/><path d="M30 12l10 5v12l-10 5z"/>',
 });
 
 function spriteTorre(t, nivel, elegida) {
@@ -1106,7 +1040,7 @@ function pintarTorres() {
 function elegirTorre(t) {
   if (tutorial.activo() && tutorial.esperaTrazo()) return;
   if (ui.jefe.activo) {
-    toast("Contra el jefe no eliges torre: dibuja la caja y cada trazo es un ataque.");
+    toast(estado.capitulo === CAPITULO.DOS ? "Contra el jefe no eliges torre: sigue las guías, cada trazo es un ataque." : "Contra el jefe no eliges torre: dibuja la caja y cada trazo es un ataque.");
     return;
   }
   const pedida = tecnicaPedida();
@@ -1149,8 +1083,9 @@ function pintarHud() {
   }
   ola.disabled = ui.modo !== MODO.LIBRE;
   ola.hidden = ui.jefe.activo;
-  demo.hidden = !ui.jefe.activo;
-  demo.disabled = ui.jefe.vencido;
+  const demoTorre = !ui.jefe.activo && ui.ejercicio && ui.ejercicio.pasos && ui.ejercicio.pasos.length > 0;
+  demo.hidden = !(ui.jefe.activo || demoTorre);
+  demo.disabled = ui.jefe.activo ? ui.jefe.vencido : false;
   $("#btn-leyenda").hidden = !ui.jefe.activo;
   const borrar = $("#btn-borrar");
   borrar.hidden = !ui.jefe.activo;
@@ -1267,8 +1202,8 @@ function insignia(ctx, t, r) {
   ctx.strokeStyle = COLOR.ACENTO;
   ctx.lineWidth = 1.4;
   ctx.beginPath();
-  if (t === TECNICA.LINEA || t === TECNICA.FLECHA) { ctx.moveTo(c.x - 3.5, c.y + 3); ctx.lineTo(c.x + 3.5, c.y - 3); }
-  else if (t === TECNICA.ELIPSE || t === TECNICA.SALCHICHA) ctx.ellipse(c.x, c.y, 4, 2.6, 0, 0, Math.PI * 2);
+  if (t === TECNICA.LINEA || t === TECNICA.SALCHICHAS) { ctx.moveTo(c.x - 3.5, c.y + 3); ctx.lineTo(c.x + 3.5, c.y - 3); }
+  else if (t === TECNICA.ELIPSE || t === TECNICA.FORMAS) ctx.ellipse(c.x, c.y, 4, 2.6, 0, 0, Math.PI * 2);
   else { ctx.rect(c.x - 3.5, c.y - 1.5, 5, 5); ctx.moveTo(c.x - 3.5, c.y - 1.5); ctx.lineTo(c.x - 1.5, c.y - 3.5); ctx.lineTo(c.x + 3.5, c.y - 3.5); ctx.lineTo(c.x + 3.5, c.y + 1.5); ctx.lineTo(c.x + 1.5, c.y + 3.5); }
   ctx.stroke();
 }
@@ -1406,6 +1341,8 @@ function bucle(ahora) {
   }
   
 requestAnimationFrame(bucle);
+
+
 }
 
 const COLOR_TRAZO_JEFE = Object.freeze({
@@ -1454,9 +1391,19 @@ function duracionDemo(n) {
   return n * (DEMO_JEFE.TRAZO_MS + DEMO_JEFE.PAUSA_MS) + DEMO_JEFE.FINAL_MS;
 }
 
+function trazosDemoTorre(ej) {
+  return (ej.pasos || []).map((p) => ({ paso: p.hint || p.tipo, puntos: p.puntos.map((q) => ({ x: q.x, y: q.y })) }));
+}
+
 function estadoDemo() {
-  if (!ui.demo || !ui.jefe.escena) return null;
-  const trazos = estado.capitulo === CAPITULO.DOS ? trazosDemoJefe2(ui.jefe.escena) : trazosDemoJefe(ui.jefe.escena);
+  if (!ui.demo) return null;
+  let trazos = null;
+  if (ui.jefe.activo && ui.jefe.escena) {
+    trazos = estado.capitulo === CAPITULO.DOS ? trazosDemoJefe2(ui.jefe.escena) : trazosDemoJefe(ui.jefe.escena);
+  } else if (ui.ejercicio && ui.ejercicio.pasos) {
+    trazos = trazosDemoTorre(ui.ejercicio);
+  }
+  if (!trazos || !trazos.length) return null;
   const pasado = Math.max(0, performance.now() - ui.demo.inicio);
   if (pasado >= duracionDemo(trazos.length)) return { trazos, hechos: trazos.length, trazo: null, f: 1, fin: true };
   const ciclo = DEMO_JEFE.TRAZO_MS + DEMO_JEFE.PAUSA_MS;
@@ -1502,12 +1449,14 @@ function pintarDemo(ctx) {
   ctx.restore();
   pad.dataset.demo = JSON.stringify({ hechos: d.hechos, total: d.trazos.length, paso: d.trazo ? d.trazo.paso : null, f: Math.round(d.f * 100) / 100 });
   const pista = $("#pad-hint");
-  const texto = d.trazo ? `Demo · ${PASO_DEMO[d.trazo.paso]}` : textoPasoJefe();
+  const pasoTxt = d.trazo ? (PASO_DEMO[d.trazo.paso] || d.trazo.paso) : null;
+  const texto = pasoTxt ? `Demo · ${pasoTxt}` : (ui.jefe.activo ? textoPasoJefe() : "Ver demo");
   if (pista.textContent !== texto) pista.textContent = texto;
 }
 
 function arrancarDemo() {
-  if (!ui.jefe.activo) return;
+  const torre = ui.ejercicio && ui.ejercicio.pasos && ui.ejercicio.pasos.length;
+  if (!ui.jefe.activo && !torre) return;
   ui.demo = { inicio: performance.now() };
   ui.demo.veces = (arrancarDemo.veces = (arrancarDemo.veces || 0) + 1);
   pad.dataset.demoVeces = String(arrancarDemo.veces);
@@ -1522,28 +1471,22 @@ function pararDemo() {
 }
 
 const COLOR_TRAZO_JEFE2 = Object.freeze({
-  [TIPO_TRAZO_JEFE2.VERTICAL]: COLOR.TINTA,
-  [TIPO_TRAZO_JEFE2.FUGANTE1]: COLOR.ACENTO,
-  [TIPO_TRAZO_JEFE2.FUGANTE2]: "#7d86c9",
-  [TIPO_TRAZO_JEFE2.CILINDRO]: "#2f8f5b",
+  [TIPO_TRAZO_JEFE2.FORMA]: COLOR.TINTA,
+  [TIPO_TRAZO_JEFE2.CONTORNO]: COLOR.ACENTO,
   [TIPO_TRAZO_JEFE2.INTERSECCION]: "#b7791f",
   [TIPO_TRAZO_JEFE2.DESCARTADO]: COLOR.MAL,
 });
 
 const NOMBRE_TRAZO_JEFE2 = Object.freeze({
-  [TIPO_TRAZO_JEFE2.VERTICAL]: "Vertical",
-  [TIPO_TRAZO_JEFE2.FUGANTE1]: "Fuga VP1",
-  [TIPO_TRAZO_JEFE2.FUGANTE2]: "Fuga VP2",
-  [TIPO_TRAZO_JEFE2.CILINDRO]: "Cilindro",
+  [TIPO_TRAZO_JEFE2.FORMA]: "Forma",
+  [TIPO_TRAZO_JEFE2.CONTORNO]: "Contorno",
   [TIPO_TRAZO_JEFE2.INTERSECCION]: "Intersección",
 });
 
 const TORRE_DE_TRAZO2 = Object.freeze({
-  [TIPO_TRAZO_JEFE2.VERTICAL]: TECNICA.CAJA2P,
-  [TIPO_TRAZO_JEFE2.FUGANTE1]: TECNICA.CAJA2P,
-  [TIPO_TRAZO_JEFE2.FUGANTE2]: TECNICA.CAJA2P,
-  [TIPO_TRAZO_JEFE2.CILINDRO]: TECNICA.SALCHICHA,
-  [TIPO_TRAZO_JEFE2.INTERSECCION]: TECNICA.FLECHA,
+  [TIPO_TRAZO_JEFE2.FORMA]: TECNICA.FORMAS,
+  [TIPO_TRAZO_JEFE2.CONTORNO]: TECNICA.SALCHICHAS,
+  [TIPO_TRAZO_JEFE2.INTERSECCION]: TECNICA.MIXTA,
 });
 
 function pintarCapaJefe(ctx) {
@@ -1564,15 +1507,32 @@ function pintarVivoJefe(ctx) {
   if (ui.trazo) trazarLibre(ctx, ui.trazo, COLOR.TINTA, false);
   if (ui.demo) pintarDemo(ctx);
   if (estado.capitulo === CAPITULO.DOS) {
-    guiaJefe(ctx, esc.vp1, COLOR.MAL, "VP1");
-    guiaJefe(ctx, esc.vp2, COLOR.MAL, "VP2");
-    guiaJefe(ctx, esc.centro, COLOR.ACENTO, "eje del cilindro");
-    ctx.setLineDash([4, 4]);
-    trazar(ctx, [
-      { x: esc.centro.x - esc.eje.x * esc.lado, y: esc.centro.y - esc.eje.y * esc.lado },
-      { x: esc.centro.x + esc.eje.x * esc.lado, y: esc.centro.y + esc.eje.y * esc.lado },
-    ], COLOR.GUIA, 1.5);
-    ctx.setLineDash([]);
+    if (esc.horizonte != null) {
+      ctx.strokeStyle = COLOR.TENUE;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, esc.horizonte);
+      ctx.lineTo(tamPad.w, esc.horizonte);
+      ctx.stroke();
+    }
+    marcarVp(ctx, esc.vp1, "VP1");
+    marcarVp(ctx, esc.vp2, "VP2");
+    const pasos = esc.pasos || [];
+    const hechos = ui.jefe.trazos.length;
+    ctx.save();
+    ctx.globalAlpha = 0.16;
+    for (const paso of pasos) trazar(ctx, paso.puntos, COLOR.TINTA, 2);
+    ctx.restore();
+    pasos.forEach((paso, i) => {
+      if (i < hechos) return;
+      const activo = i === hechos;
+      ctx.save();
+      ctx.setLineDash(activo ? [7, 7] : [4, 5]);
+      ctx.globalAlpha = activo ? 1 : 0.4;
+      trazar(ctx, paso.puntos, paso.tipo === "interseccion" ? "#b7791f" : COLOR.GUIA, activo ? 2.4 : 1.5);
+      ctx.restore();
+      if (activo && paso.puntos[0]) punto(ctx, paso.puntos[0], 5.5, COLOR.ACENTO);
+    });
     return;
   }
   guiaJefe(ctx, esc.fuga, COLOR.MAL, ETIQUETA_GUIA.FUGA);
@@ -1582,7 +1542,7 @@ function pintarVivoJefe(ctx) {
 function nuevaEscenaJefe() {
   if (estado.capitulo === CAPITULO.DOS) {
     ui.jefe.escena = escenaJefe2(tamPad.w, tamPad.h, arribaPad(), ui.jefe.azar);
-    pad.dataset.jefe = JSON.stringify({ vp1: ui.jefe.escena.vp1, vp2: ui.jefe.escena.vp2, centro: ui.jefe.escena.centro, lado: ui.jefe.escena.lado });
+    pad.dataset.jefe = JSON.stringify({ vp1: ui.jefe.escena.vp1, vp2: ui.jefe.escena.vp2, horizonte: ui.jefe.escena.horizonte, pasos: (ui.jefe.escena.pasos || []).length });
     return;
   }
   ui.jefe.escena = escenaJefe(tamPad.w, tamPad.h, arribaPad(), ui.jefe.azar);
@@ -1762,30 +1722,17 @@ function terminarTrazoJefe2(puntos) {
   const trazos = [...ui.jefe.trazos, puntos];
   const clas = clasificarTrazosJefe2(trazos, esc);
   const c = clas[clas.length - 1];
-  if (c.tipo === TIPO_TRAZO_JEFE2.DESCARTADO) {
-    marcaJefe(fin, "muy corto", "Traza más largo", COLOR.MAL);
-    pintarPad();
-    return;
-  }
-  const cupoKey = c.tipo;
-  const cuentaTipo = {
-    [TIPO_TRAZO_JEFE2.VERTICAL]: "verticales",
-    [TIPO_TRAZO_JEFE2.FUGANTE1]: "fugantes1",
-    [TIPO_TRAZO_JEFE2.FUGANTE2]: "fugantes2",
-    [TIPO_TRAZO_JEFE2.CILINDRO]: "cilindros",
-    [TIPO_TRAZO_JEFE2.INTERSECCION]: "intersecciones",
-  }[c.tipo];
-  if (cuentaTipo && cuentaJefe2(clas)[cuentaTipo] > CUPO_JEFE2[cupoKey]) {
-    marcaJefe(fin, "sobra", `${NOMBRE_TRAZO_JEFE2[c.tipo]}: ya está. ${textoPasoJefe().replace(/^Jefe · \d\. /, "")}`, COLOR.MAL);
+  if (c.tipo === TIPO_TRAZO_JEFE2.DESCARTADO || !c.r || !c.r.valido) {
+    marcaJefe(fin, "fallo", "Sigue la guía azul numerada", COLOR.MAL);
     pintarPad();
     return;
   }
   ui.jefe.trazos = trazos;
   const copia = copiaStats();
   const presiones = PRESION.has(puntos[0]) ? puntos.map((p) => PRESION.get(p)) : null;
-  const ataque = calificarAtaque2(c, puntos, esc, presiones);
+  const ataque = calificarAtaque2(c, puntos, esc, clas, presiones);
   ui.jefe.ataques = [...ui.jefe.ataques, ataque];
-  const torre = TORRE_DE_TRAZO2[c.tipo] || TECNICA.CAJA2P;
+  const torre = TORRE_DE_TRAZO2[c.tipo] || TECNICA.FORMAS;
   const dano = danoAtaqueJefe(ataque.niveles, estado.mejoras[torre]);
   const golpe = danarJefe(dano);
   const destello = lanzarDestello(ataque, 0);
@@ -1793,15 +1740,17 @@ function terminarTrazoJefe2(puntos) {
   const lectura = $("#lectura");
   lectura.classList.add("puntos");
   lectura.replaceChildren(
-    chip(NOMBRE_TRAZO_JEFE2[c.tipo], golpe.dano > 0 ? `−${golpe.dano}` : "sin daño", golpe.dano > 0 ? "dano" : "mal"),
+    chip(NOMBRE_TRAZO_JEFE2[c.tipo] || "Trazo", golpe.dano > 0 ? `−${golpe.dano}` : "sin daño", golpe.dano > 0 ? "dano" : "mal"),
     ...chipsAtaque(ataque),
   );
   const color = golpe.dano === 0 ? COLOR.MAL : colorPuntaje(multiplicadorDeNiveles(ataque.niveles));
-  marcaJefe(fin, golpe.dano > 0 ? `−${golpe.dano}` : "fallo", `${NOMBRE_TRAZO_JEFE2[c.tipo]} · ${resumenNiveles(ataque)}`, color);
-  const falta = faltantesJefe2(clas);
-  if (!golpe.vencido && Object.values(falta).every((v) => v === 0)) {
+  marcaJefe(fin, golpe.dano > 0 ? `−${golpe.dano}` : "fallo", `${NOMBRE_TRAZO_JEFE2[c.tipo] || "Trazo"} · ${resumenNiveles(ataque)}`, color);
+  const cuenta = cuentaJefe2(clas);
+  const falta = faltantesJefe2(cuenta, JEFE_CAP2);
+  const pasosHechos = trazos.length >= ((esc.pasos || []).length);
+  if (!golpe.vencido && pasosHechos && Object.values(falta).every((v) => v === 0)) {
     vaciarDeshacer();
-    const res = evaluarJefe2(trazos, esc, ui.jefe.nivel);
+    const res = evaluarJefe2(trazos, esc, JEFE_CAP2);
     const rotos = res.puntos.filter((p) => p.roto).length;
     const final = combinarAtaques(ui.jefe.ataques);
     const danoFinal = danoAtaqueFinal(final.niveles);

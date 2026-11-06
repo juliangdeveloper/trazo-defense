@@ -666,322 +666,173 @@ export function asignarBorde(puntos, bordes, usados = []) {
   return mejor;
 }
 
-export function evaluarBordeFlecha(puntos, borde, anchoCerca, anchoLejos) {
-  if (trazoCorto(puntos)) return { valido: false, puntaje: 0 };
-  const muestras = remuestrear(puntos, Math.max(4, longitud(borde) / PUNTAJE.FLECHA_MUESTRAS));
-  const ideal = remuestrear(borde, Math.max(4, longitud(borde) / PUNTAJE.FLECHA_MUESTRAS));
-  let desvio = 0;
-  for (let i = 0; i < muestras.length; i++) {
-    const t = i / Math.max(1, muestras.length - 1);
-    const esperado = puntoEnPolilinea(ideal, t);
-    desvio += distancia(muestras[i], esperado);
+
+
+export function distanciaAPolilinea(p, poly) {
+  let mejor = Infinity;
+  for (let i = 1; i < poly.length; i++) {
+    const d = distanciaARecta(p, poly[i - 1], poly[i]);
+    const a = poly[i - 1], b = poly[i];
+    const abx = b.x - a.x, aby = b.y - a.y;
+    const apx = p.x - a.x, apy = p.y - a.y;
+    const ab2 = abx * abx + aby * aby || 1;
+    const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / ab2));
+    const qx = a.x + abx * t, qy = a.y + aby * t;
+    const dd = Math.hypot(p.x - qx, p.y - qy);
+    if (dd < mejor) mejor = dd;
   }
-  const largo = longitud(borde) || 1;
-  const extremosPct = (costoBorde(puntos, borde) / 2 / largo) * 100;
-  const suavidad = temblorAngular(muestras);
-  const base = 0.45 * clamp01(1 - (desvio / muestras.length) / (largo * 0.12))
-    + 0.3 * clamp01(1 - suavidad / PUNTAJE.FLECHA_SUAVIDAD_MAX_DEG)
-    + 0.25 * clamp01(1 - extremosPct / PUNTAJE.FLECHA_EXTREMOS_MAX_PCT);
-  return {
-    valido: true,
-    puntaje: redondear(clamp01(base), 3),
-    suavidad_deg: redondear(suavidad, 1),
-    extremos_pct: redondear(extremosPct, 1),
-    desvio_px: redondear(desvio / muestras.length, 1),
-    ancho_cerca: anchoCerca,
-    ancho_lejos: anchoLejos,
-    duracion_ms: Math.round(duracionMs(puntos)),
-  };
+  return mejor;
 }
 
-export function resumenFlecha(resultados, bordeIzq, bordeDer, puntosIzq, puntosDer) {
-  const validos = resultados.filter((r) => r && r.valido);
-  if (!validos.length) return { valido: false, puntaje: 0 };
-  const media = (clave) => validos.reduce((acc, r) => acc + r[clave], 0) / validos.length;
-  let encogimiento = 0;
-  let solape = 0;
-  let estaciones = 0;
-  if (puntosIzq && puntosDer && bordeIzq && bordeDer) {
-    for (let i = 0; i <= 10; i++) {
-      const t = i / 10;
-      const li = puntoEnPolilinea(puntosIzq, t);
-      const ld = puntoEnPolilinea(puntosDer, t);
-      const ei = puntoEnPolilinea(bordeIzq, t);
-      const ed = puntoEnPolilinea(bordeDer, t);
-      const medido = distancia(li, ld);
-      const esperado = distancia(ei, ed) || 1;
-      encogimiento += Math.abs(medido - esperado) / esperado;
-      estaciones += 1;
-    }
-    const cerca = distancia(puntoEnPolilinea(puntosIzq, 0), puntoEnPolilinea(puntosDer, 0));
-    const lejos = distancia(puntoEnPolilinea(puntosIzq, 1), puntoEnPolilinea(puntosDer, 1));
-    const fold = distancia(puntoEnPolilinea(puntosIzq, 0.55), puntoEnPolilinea(puntosDer, 0.55));
-    const esperadoFold = distancia(puntoEnPolilinea(bordeIzq, 0.55), puntoEnPolilinea(bordeDer, 0.55)) || 1;
-    solape = Math.abs(fold - esperadoFold) / esperadoFold * 100;
-    if (!(lejos < cerca * 0.85)) encogimiento += 0.4;
+export function evaluarGuia(puntos, guia, cerrado = false) {
+  if (!guia || guia.length < 2 || !puntos || puntos.length < 2) {
+    return { valido: false, puntaje: 0, desviacion_pct: 100, suavidad_deg: 90, extremos_pct: 100, cierre_pct: 100 };
   }
-  const encogimientoPct = estaciones ? (encogimiento / estaciones) * 100 : 100;
-  const suavidad = media("suavidad_deg");
-  const base = 0.4 * clamp01(1 - suavidad / PUNTAJE.FLECHA_SUAVIDAD_MAX_DEG)
-    + 0.35 * clamp01(1 - encogimientoPct / PUNTAJE.FLECHA_ENCOGIMIENTO_MAX_PCT)
-    + 0.25 * clamp01(1 - solape / PUNTAJE.FLECHA_SOLAPE_MAX_PCT);
-  return {
-    valido: true,
-    puntaje: redondear(clamp01(base), 3),
-    suavidad_deg: redondear(suavidad, 1),
-    encogimiento_pct: redondear(encogimientoPct, 1),
-    solape_pct: redondear(solape, 1),
-    extremos_pct: redondear(media("extremos_pct"), 1),
-    bordes: validos.length,
-    duracion_ms: validos.reduce((acc, r) => acc + r.duracion_ms, 0),
-  };
-}
-
-export function evaluarContornoSalchicha(puntos, contorno) {
-  if (trazoCorto(puntos)) return { valido: false, puntaje: 0 };
-  const ejes = centroidesEjes(puntos);
-  const ejeForma = contorno.eje;
-  const px = -ejeForma.y;
-  const py = ejeForma.x;
-  const ejeDeg = anguloEntre(ejes.menorUx, ejes.menorUy, ejeForma.x, ejeForma.y);
-  const ejeMenor = Math.min(ejeDeg, 180 - ejeDeg);
-  const muestras = remuestrear(puntos, Math.max(4, (contorno.rx + contorno.ry) / 16));
-  let error = 0;
-  let simIzq = 0;
-  let simDer = 0;
-  for (const p of muestras) {
-    const dx = p.x - contorno.cx;
-    const dy = p.y - contorno.cy;
-    const u = dx * ejeForma.x + dy * ejeForma.y;
-    const v = dx * px + dy * py;
-    const rn = Math.hypot(u / (contorno.rx || 1), v / (contorno.ry || 1));
-    error += Math.abs(rn - 1);
-    if (v >= 0) simDer += Math.abs(v);
-    else simIzq += Math.abs(v);
+  const largoGuia = longitud(guia) || 1;
+  const escala = Math.max(24, largoGuia);
+  let suma = 0;
+  for (const p of puntos) suma += distanciaAPolilinea(p, guia);
+  const media = suma / puntos.length;
+  const desviacion_pct = (media / escala) * 100;
+  const ext0 = distanciaAPolilinea(puntos[0], guia);
+  const ext1 = distanciaAPolilinea(puntos[puntos.length - 1], guia);
+  const extremos_pct = ((ext0 + ext1) * 0.5 / escala) * 100;
+  let suavidad = 0;
+  let nAng = 0;
+  for (let i = 2; i < puntos.length; i++) {
+    const a = puntos[i - 2], b = puntos[i - 1], c = puntos[i];
+    const ax = b.x - a.x, ay = b.y - a.y;
+    const bx = c.x - b.x, by = c.y - b.y;
+    const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+    if (la < 1 || lb < 1) continue;
+    const ang = Math.acos(Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb)))) * GRADOS;
+    suavidad += ang;
+    nAng += 1;
   }
-  const ajustePct = (error / muestras.length) * 100;
-  const radioRef = contorno.ry || 1;
-  const simetriaPct = (Math.abs(simIzq - simDer) / Math.max(1, simIzq + simDer) / radioRef) * 100 * radioRef;
-  const cobertura = barridoAngular(muestras, contorno.cx, contorno.cy);
-  const fin = puntos[puntos.length - 1];
-  const diametro = contorno.rx + contorno.ry;
-  const cierrePct = (distancia(puntos[0], fin) / diametro) * 100;
-  const factorCobertura = clamp01((cobertura - PUNTAJE.ELIPSE_COBERTURA_MIN_DEG) / (PUNTAJE.ELIPSE_COBERTURA_OK_DEG - PUNTAJE.ELIPSE_COBERTURA_MIN_DEG));
-  const base = 0.45 * clamp01(1 - ejeMenor / PUNTAJE.SALCHICHA_EJE_MAX_DEG)
-    + 0.3 * clamp01(1 - ajustePct / PUNTAJE.SALCHICHA_AJUSTE_MAX_PCT)
-    + 0.25 * clamp01(1 - simetriaPct / PUNTAJE.SALCHICHA_SIMETRIA_MAX_PCT);
-  return {
-    valido: true,
-    puntaje: redondear(clamp01(base * factorCobertura), 3),
-    eje_deg: redondear(ejeMenor, 1),
-    ajuste_pct: redondear(ajustePct, 1),
-    simetria_pct: redondear(simetriaPct, 1),
-    cierre_pct: redondear(cierrePct, 1),
-    cobertura_deg: Math.round(cobertura),
-    duracion_ms: Math.round(duracionMs(puntos)),
-  };
+  const suavidad_deg = nAng ? suavidad / nAng : 0;
+  let cierre_pct = 0;
+  if (cerrado) {
+    const d = distancia(puntos[0], puntos[puntos.length - 1]);
+    cierre_pct = (d / escala) * 100;
+  }
+  const pDesv = clamp01(1 - desviacion_pct / PUNTAJE.GUIA_DESVIACION_MAX_PCT);
+  const pExt = clamp01(1 - extremos_pct / PUNTAJE.GUIA_EXTREMOS_MAX_PCT);
+  const pSuave = clamp01(1 - suavidad_deg / PUNTAJE.GUIA_SUAVIDAD_MAX_DEG);
+  const pCierre = cerrado ? clamp01(1 - cierre_pct / PUNTAJE.GUIA_CIERRE_MAX_PCT) : 1;
+  const puntaje = clamp01(pDesv * 0.45 + pExt * 0.2 + pSuave * 0.2 + pCierre * 0.15);
+  const valido = puntaje >= PUNTAJE.FALLO_BAJO && longitud(puntos) >= PUNTAJE.TRAZO_MIN_PX;
+  return { valido, puntaje, desviacion_pct, suavidad_deg, extremos_pct, cierre_pct };
 }
 
-export function resumenSalchicha(resultados) {
-  const validos = resultados.filter((r) => r && r.valido);
-  if (!validos.length) return { valido: false, puntaje: 0 };
-  const media = (clave) => validos.reduce((acc, r) => acc + r[clave], 0) / validos.length;
-  return {
-    valido: true,
-    puntaje: redondear(validos.reduce((acc, r) => acc + r.puntaje, 0) / Math.max(PUNTAJE.SALCHICHA_CONTORNOS, validos.length), 3),
-    eje_deg: redondear(media("eje_deg"), 1),
-    ajuste_pct: redondear(media("ajuste_pct"), 1),
-    simetria_pct: redondear(media("simetria_pct"), 1),
-    cierre_pct: redondear(media("cierre_pct"), 1),
-    contornos: validos.length,
-    duracion_ms: validos.reduce((acc, r) => acc + r.duracion_ms, 0),
-  };
+export function resumenInterseccion(resultados) {
+  if (!resultados.length) return { puntaje: 0, desviacion_pct: 100, total: 0 };
+  const puntaje = resultados.reduce((s, r) => s + r.puntaje, 0) / resultados.length;
+  const desviacion_pct = resultados.reduce((s, r) => s + (r.desviacion_pct || 0), 0) / resultados.length;
+  return { puntaje, desviacion_pct, total: resultados.length };
 }
 
-export function evaluarFugante2p(puntos, arista, vp) {
-  return evaluarFugante(puntos, arista, vp);
-}
-
-export function resumenCaja2p(resultados) {
-  return resumenCubo(resultados, PUNTAJE.CAJA2P_LINEAS);
+export function asignarPaso(puntos, pasos, usadas) {
+  let mejor = -1, best = Infinity;
+  const cx = puntos.reduce((s, p) => s + p.x, 0) / puntos.length;
+  const cy = puntos.reduce((s, p) => s + p.y, 0) / puntos.length;
+  pasos.forEach((paso, i) => {
+    if (usadas.includes(i)) return;
+    const d = distanciaAPolilinea({ x: cx, y: cy }, paso.puntos);
+    if (d < best) { best = d; mejor = i; }
+  });
+  return mejor;
 }
 
 export const TIPO_TRAZO_JEFE2 = Object.freeze({
-  VERTICAL: "vertical",
-  FUGANTE1: "fugante1",
-  FUGANTE2: "fugante2",
-  CILINDRO: "cilindro",
+  FORMA: "forma",
+  CONTORNO: "contorno",
   INTERSECCION: "interseccion",
   DESCARTADO: "descartado",
 });
 
-function clasificarLineaJefe2(puntos, escena) {
-  const { recta, pct, largo } = rectitudPct(puntos);
-  const repasos = contarRepasos(puntos, recta.ux, recta.uy, largo);
-  const seguro = pct <= JEFE_CAP2.rectitudSeguraPct && repasos === 0 && puntajeSeguridad(velocidad(puntos)) >= 0.5;
-  const comun = { rectitud_pct: redondear(pct, 1), repasos, seguro };
-  const deEje = desvioDeEje(recta);
-  const aVp1 = desvioHaciaFuga(puntos, escena.vp1);
-  const aVp2 = desvioHaciaFuga(puntos, escena.vp2);
-  if (deEje <= 12 && Math.abs(recta.uy) > Math.abs(recta.ux) * 1.2) {
-    return { ...comun, tipo: TIPO_TRAZO_JEFE2.VERTICAL, error_deg: deEje };
-  }
-  if (aVp1 <= aVp2 && aVp1 < 25) return { ...comun, tipo: TIPO_TRAZO_JEFE2.FUGANTE1, error_deg: aVp1 };
-  if (aVp2 < 25) return { ...comun, tipo: TIPO_TRAZO_JEFE2.FUGANTE2, error_deg: aVp2 };
-  if (deEje < Math.min(aVp1, aVp2)) return { ...comun, tipo: TIPO_TRAZO_JEFE2.VERTICAL, error_deg: deEje };
-  return { ...comun, tipo: aVp1 <= aVp2 ? TIPO_TRAZO_JEFE2.FUGANTE1 : TIPO_TRAZO_JEFE2.FUGANTE2, error_deg: Math.min(aVp1, aVp2) };
-}
-
-function pareceCilindro(puntos) {
-  if (trazoCorto(puntos)) return false;
-  const { pct } = rectitudPct(puntos);
-  if (pct < 8) return false;
-  let cx = 0;
-  let cy = 0;
-  for (const p of puntos) { cx += p.x; cy += p.y; }
-  return barridoAngular(puntos, cx / puntos.length, cy / puntos.length) >= JEFE_CAP2.cilindroBarridoMinDeg;
-}
-
-function pareceInterseccion(puntos, escena) {
-  if (trazoCorto(puntos)) return false;
-  const { pct } = rectitudPct(puntos);
-  if (pct < JEFE_CAP2.interseccionRectitudMinPct) return false;
-  const mid = puntos[Math.floor(puntos.length / 2)];
-  return distancia(mid, escena.centro) < escena.lado * 0.85;
-}
+export const CUPO_JEFE2 = Object.freeze({ formas: 4, intersecciones: 2 });
 
 export function clasificarTrazosJefe2(trazos, escena) {
-  const salida = [];
-  let verticales = 0;
-  let fug1 = 0;
-  let fug2 = 0;
-  let cilindros = 0;
-  for (let indice = 0; indice < trazos.length; indice++) {
-    const puntos = trazos[indice];
-    if (trazoCorto(puntos)) { salida.push({ tipo: TIPO_TRAZO_JEFE2.DESCARTADO, indice }); continue; }
-    if (cilindros < JEFE_CAP2.minimoCilindro && pareceCilindro(puntos) && verticales + fug1 + fug2 >= 4) {
-      const ejes = centroidesEjes(puntos);
-      const ejeDeg = Math.min(anguloEntre(ejes.menorUx, ejes.menorUy, escena.eje.x, escena.eje.y), anguloEntre(ejes.mayorUx, ejes.mayorUy, escena.eje.x, escena.eje.y));
-      salida.push({ tipo: TIPO_TRAZO_JEFE2.CILINDRO, indice, seguro: false, eje_deg: redondear(Math.min(ejeDeg, 180 - ejeDeg), 1), cx: ejes.cx, cy: ejes.cy, rx: ejes.rx, ry: ejes.ry });
-      cilindros += 1;
-      continue;
-    }
-    if (cilindros >= JEFE_CAP2.minimoCilindro && pareceInterseccion(puntos, escena)) {
-      let error = 0;
-      for (const p of puntos) {
-        let mejor = Infinity;
-        for (const q of escena.interseccion) mejor = Math.min(mejor, distancia(p, q));
-        error += mejor;
-      }
-      const ref = escena.lado || 1;
-      const puntaje = clamp01(1 - (error / puntos.length) / (ref * ATAQUE.PRECISION_INTER_MAX));
-      salida.push({ tipo: TIPO_TRAZO_JEFE2.INTERSECCION, indice, seguro: false, puntaje: redondear(puntaje, 3), error_pct: redondear((error / puntos.length / ref) * 100, 1) });
-      continue;
-    }
-    const c = clasificarLineaJefe2(puntos, escena);
-    c.indice = indice;
-    if (c.tipo === TIPO_TRAZO_JEFE2.VERTICAL) verticales += 1;
-    else if (c.tipo === TIPO_TRAZO_JEFE2.FUGANTE1) fug1 += 1;
-    else if (c.tipo === TIPO_TRAZO_JEFE2.FUGANTE2) fug2 += 1;
-    salida.push(c);
-  }
-  return salida;
+  const pasos = escena.pasos || [];
+  const usadas = [];
+  return trazos.map((trazo) => {
+    const idx = asignarPaso(trazo, pasos, usadas);
+    if (idx < 0) return { tipo: TIPO_TRAZO_JEFE2.DESCARTADO, paso: -1, r: { valido: false, puntaje: 0 } };
+    usadas.push(idx);
+    const paso = pasos[idx];
+    const r = evaluarGuia(trazo, paso.puntos, paso.cerrado);
+    let tipo = TIPO_TRAZO_JEFE2.FORMA;
+    if (paso.tipo === "interseccion") tipo = TIPO_TRAZO_JEFE2.INTERSECCION;
+    else if (paso.tipo === "contorno" || paso.tipo === "elipse") tipo = TIPO_TRAZO_JEFE2.CONTORNO;
+    return { tipo, paso: idx, r, hint: paso.hint };
+  });
 }
 
 export function cuentaJefe2(clasificados) {
-  const cuenta = (tipo) => clasificados.filter((c) => c.tipo === tipo).length;
+  const formas = clasificados.filter((c) => c.tipo === TIPO_TRAZO_JEFE2.FORMA && c.r.valido).length;
+  const contornos = clasificados.filter((c) => c.tipo === TIPO_TRAZO_JEFE2.CONTORNO && c.r.valido).length;
+  const intersecciones = clasificados.filter((c) => c.tipo === TIPO_TRAZO_JEFE2.INTERSECCION && c.r.valido).length;
+  return { formas, contornos, intersecciones };
+}
+
+export function faltantesJefe2(cuenta, conf) {
   return {
-    verticales: cuenta(TIPO_TRAZO_JEFE2.VERTICAL),
-    fugantes1: cuenta(TIPO_TRAZO_JEFE2.FUGANTE1),
-    fugantes2: cuenta(TIPO_TRAZO_JEFE2.FUGANTE2),
-    cilindros: cuenta(TIPO_TRAZO_JEFE2.CILINDRO),
-    intersecciones: cuenta(TIPO_TRAZO_JEFE2.INTERSECCION),
+    formas: Math.max(0, (conf.minimoFormas || 4) - cuenta.formas),
+    intersecciones: Math.max(0, (conf.minimoIntersecciones || 2) - cuenta.intersecciones),
   };
 }
 
-export const CUPO_JEFE2 = Object.freeze({
-  [TIPO_TRAZO_JEFE2.VERTICAL]: JEFE_CAP2.minimoVerticales,
-  [TIPO_TRAZO_JEFE2.FUGANTE1]: Math.ceil(JEFE_CAP2.minimoFugantes / 2),
-  [TIPO_TRAZO_JEFE2.FUGANTE2]: Math.floor(JEFE_CAP2.minimoFugantes / 2),
-  [TIPO_TRAZO_JEFE2.CILINDRO]: JEFE_CAP2.minimoCilindro,
-  [TIPO_TRAZO_JEFE2.INTERSECCION]: JEFE_CAP2.minimoInterseccion,
-});
-
-export function faltantesJefe2(clasificados) {
-  const n = cuentaJefe2(clasificados);
-  return {
-    verticales: Math.max(0, JEFE_CAP2.minimoVerticales - n.verticales),
-    fugantes: Math.max(0, JEFE_CAP2.minimoFugantes - n.fugantes1 - n.fugantes2),
-    cilindros: Math.max(0, JEFE_CAP2.minimoCilindro - n.cilindros),
-    intersecciones: Math.max(0, JEFE_CAP2.minimoInterseccion - n.intersecciones),
-  };
-}
-
-export function evaluarJefe2(trazos, escena, nivel) {
-  const clasificados = clasificarTrazosJefe2(trazos, escena);
-  const falta = faltantesJefe2(clasificados);
-  const listo = Object.values(falta).every((v) => v === 0);
-  const deTipo = (tipo) => clasificados.filter((c) => c.tipo === tipo);
-  const lineas = clasificados.filter((c) => c.tipo === TIPO_TRAZO_JEFE2.VERTICAL || c.tipo === TIPO_TRAZO_JEFE2.FUGANTE1 || c.tipo === TIPO_TRAZO_JEFE2.FUGANTE2);
-  const cilindros = deTipo(TIPO_TRAZO_JEFE2.CILINDRO);
-  const inters = deTipo(TIPO_TRAZO_JEFE2.INTERSECCION);
-  const medidas = {
-    [PUNTO_DEBIL.VP1]: promedio(deTipo(TIPO_TRAZO_JEFE2.FUGANTE1).map((c) => c.error_deg)),
-    [PUNTO_DEBIL.VP2]: promedio(deTipo(TIPO_TRAZO_JEFE2.FUGANTE2).map((c) => c.error_deg)),
-    [PUNTO_DEBIL.CILINDRO]: cilindros.length ? Math.max(...cilindros.map((c) => clamp01(1 - (c.eje_deg || 20) / 20))) * 100 : NaN,
-    [PUNTO_DEBIL.INTERSECCION]: inters.length ? Math.max(...inters.map((c) => (c.puntaje || 0))) * 100 : NaN,
-    [PUNTO_DEBIL.SEGURIDAD]: lineas.length ? (lineas.filter((c) => c.seguro).length / lineas.length) * 100 : NaN,
-  };
-  const puntos = JEFE_CAP2.puntosDebiles.map((punto) => {
+export function evaluarJefe2(trazos, escena, conf) {
+  const clas = clasificarTrazosJefe2(trazos, escena);
+  const cuenta = cuentaJefe2(clas);
+  const validos = clas.filter((c) => c.r.valido);
+  const media = validos.length ? validos.reduce((s, c) => s + c.r.puntaje, 0) / validos.length : 0;
+  const inters = clas.filter((c) => c.tipo === TIPO_TRAZO_JEFE2.INTERSECCION && c.r.valido);
+  const interScore = inters.length ? inters.reduce((s, c) => s + c.r.puntaje, 0) / inters.length : 0;
+  const desv = validos.length ? validos.reduce((s, c) => s + (c.r.desviacion_pct || 0), 0) / validos.length : 100;
+  const nivel = 1;
+  const puntos = (conf.puntosDebiles || []).map((punto) => {
     const meta = metaPuntoDebil(punto, nivel);
-    const valor = medidas[punto.id];
-    const roto = Number.isFinite(valor) && (punto.compara === COMPARA.MENOR_O_IGUAL ? valor <= meta : valor >= meta);
-    return { id: punto.id, nombre: punto.nombre, corto: punto.corto, texto: punto.texto, media: punto.media, unidad: punto.unidad, compara: punto.compara, valor: Number.isFinite(valor) ? redondear(valor, 1) : null, meta: redondear(meta, 1), roto };
+    let valor = null;
+    if (punto.id === PUNTO_DEBIL.VP1 || punto.id === PUNTO_DEBIL.VP2) valor = desv;
+    else if (punto.id === PUNTO_DEBIL.CILINDRO) valor = Math.round(media * 100);
+    else if (punto.id === PUNTO_DEBIL.INTERSECCION) valor = Math.round(interScore * 100);
+    else if (punto.id === PUNTO_DEBIL.SEGURIDAD) valor = Math.round(media * 100);
+    const roto = valor == null ? false : (punto.compara === COMPARA.MENOR_O_IGUAL ? valor <= meta : valor >= meta);
+    return { ...punto, valor, meta, roto };
   });
-  return { listo, falta, clasificados, puntos, vencido: listo && puntos.every((p) => p.roto) };
-}
-
-function valoresJefe2(c, puntos, escena) {
-  const { recta, largo } = rectitudPct(puntos);
-  const rectitud = clamp01(1 - c.rectitud_pct / ATAQUE.RECTITUD_MAX_PCT);
-  if (c.tipo === TIPO_TRAZO_JEFE2.VERTICAL) {
-    return {
-      precision: clamp01(1 - Math.abs(recta.cx - escena.centro.x) / (escena.lado * ATAQUE.PRECISION_FRONTAL_MAX)),
-      rectitud,
-      proporcion: clamp01(1 - c.error_deg / ATAQUE.PROPORCION_EJE_MAX_DEG),
-    };
-  }
-  if (c.tipo === TIPO_TRAZO_JEFE2.FUGANTE1 || c.tipo === TIPO_TRAZO_JEFE2.FUGANTE2) {
-    return {
-      precision: clamp01(1 - c.error_deg / ATAQUE.PRECISION_FUGA_MAX_DEG),
-      rectitud,
-      proporcion: clamp01(1 - Math.abs(largo / (escena.lado || 1) - 1) / ATAQUE.PROPORCION_LADO_MAX),
-    };
-  }
-  if (c.tipo === TIPO_TRAZO_JEFE2.CILINDRO) {
-    return {
-      precision: clamp01(1 - distancia({ x: c.cx, y: c.cy }, escena.centro) / (escena.lado * ATAQUE.PRECISION_ELIPSE_MAX)),
-      rectitud: clamp01(1 - (c.eje_deg || 20) / 20),
-      proporcion: clamp01(1 - Math.abs(((c.rx + c.ry) / 2) - escena.cilRadio) / (escena.cilRadio * ATAQUE.PROPORCION_LADO_MAX || 1)),
-    };
-  }
   return {
-    precision: c.puntaje || 0,
-    rectitud: clamp01(1 - (c.error_pct || 40) / 40),
-    proporcion: c.puntaje || 0,
+    clas,
+    cuenta,
+    faltantes: faltantesJefe2(cuenta, conf),
+    puntaje: media,
+    interseccion: interScore,
+    puntos,
   };
 }
 
-export function calificarAtaque2(c, puntos, escena, presiones = null) {
-  if (!c || c.tipo === TIPO_TRAZO_JEFE2.DESCARTADO || trazoCorto(puntos)) return null;
-  const base = valoresJefe2(c, puntos, escena);
-  const presion = valorPresion(puntos, presiones);
+
+export function calificarAtaque2(c, puntos, escena, clasificados = [], presiones = null) {
+  const r = c.r || { puntaje: 0, desviacion_pct: 100, suavidad_deg: 90 };
+  const precision = clamp01(1 - (r.desviacion_pct || 50) / 20);
+  const rectitud = clamp01(1 - (r.suavidad_deg || 20) / 24);
+  const seguridad = puntajeSeguridad(velocidad(puntos));
+  const proporcion = clamp01(r.puntaje || 0);
+  let presion = 0.55;
+  if (presiones && presiones.length) {
+    const media = presiones.reduce((s, v) => s + v, 0) / presiones.length;
+    const variable = Math.max(...presiones) - Math.min(...presiones);
+    presion = clamp01(1 - variable / 0.5) * 0.7 + clamp01(media) * 0.3;
+  }
   const valores = {
-    [DIMENSION.PRECISION]: base.precision,
-    [DIMENSION.RECTITUD]: base.rectitud,
-    [DIMENSION.SEGURIDAD]: valorSeguridad(puntos, c.repasos || 0),
-    [DIMENSION.PROPORCION]: base.proporcion,
-    [DIMENSION.PRESION]: presion.valor,
+    [DIMENSION.PRECISION]: precision,
+    [DIMENSION.RECTITUD]: rectitud,
+    [DIMENSION.SEGURIDAD]: seguridad,
+    [DIMENSION.PROPORCION]: proporcion,
+    [DIMENSION.PRESION]: presion,
   };
-  return armarAtaque(valores, c.tipo, presion.lapiz);
+  const niveles = {};
+  for (const d of DIMENSIONES) niveles[d.id] = nivelAtaque(valores[d.id]);
+  const media = Object.values(valores).reduce((s, v) => s + v, 0) / DIMENSIONES.length;
+  return { valores, niveles, media, tipo: c.tipo };
 }

@@ -1,4 +1,5 @@
-import { TECNICA, ESCENA_JEFE, ESCENA_JEFE2 } from "./config.js";
+import { TECNICA, ESCENA_JEFE } from "./config.js";
+import { crearCamara, generarEscena, tipificarTorre, seedRng, PRIMITIVA } from "./mundo3d.js";
 
 const MARGEN = 0.1;
 const LINEA_LARGO = Object.freeze([0.5, 0.78]);
@@ -93,17 +94,15 @@ export function desplazarEjercicio(ej, dy) {
   if (!dy) return ej;
   if (ej.tecnica === TECNICA.ELIPSE) return { ...ej, caja: bajar(ej.caja, dy) };
   if (ej.tecnica === TECNICA.PERSPECTIVA) return { ...ej, fuga: bajar(ej.fuga, dy), frente: ej.frente.map((p) => bajar(p, dy)), fondo: ej.fondo.map((p) => bajar(p, dy)) };
-  if (ej.tecnica === TECNICA.FLECHA) return { ...ej, centro: ej.centro.map((p) => bajar(p, dy)), bordes: ej.bordes.map((b) => b.map((p) => bajar(p, dy))) };
-  if (ej.tecnica === TECNICA.SALCHICHA) return { ...ej, a: bajar(ej.a, dy), b: bajar(ej.b, dy), contornos: ej.contornos.map((c) => ({ ...c, cy: c.cy + dy })) };
-  if (ej.tecnica === TECNICA.CAJA2P) return {
-    ...ej,
-    horizonte: ej.horizonte + dy,
-    vp1: bajar(ej.vp1, dy),
-    vp2: bajar(ej.vp2, dy),
-    vertical: ej.vertical.map((p) => bajar(p, dy)),
-    fondo: Object.fromEntries(Object.entries(ej.fondo).map(([k, p]) => [k, bajar(p, dy)])),
-    aristas: ej.aristas.map((a) => ({ ...a, desde: bajar(a.desde, dy), hasta: bajar(a.hasta, dy) })),
-  };
+  if (ej.pasos) {
+    return {
+      ...ej,
+      horizonte: (ej.horizonte || 0) + dy,
+      vp1: ej.vp1 ? bajar(ej.vp1, dy) : ej.vp1,
+      vp2: ej.vp2 ? bajar(ej.vp2, dy) : ej.vp2,
+      pasos: ej.pasos.map((paso) => ({ ...paso, puntos: paso.puntos.map((p) => bajar(p, dy)) })),
+    };
+  }
   return { ...ej, a: bajar(ej.a, dy), b: bajar(ej.b, dy) };
 }
 
@@ -113,9 +112,9 @@ export function crearEjercicio(tecnica, w, h, rng = Math.random, arriba = 0) {
   let ej;
   if (tecnica === TECNICA.ELIPSE) ej = ejercicioElipse(w, alto, rng);
   else if (tecnica === TECNICA.PERSPECTIVA) ej = ejercicioPerspectiva(w, alto, rng);
-  else if (tecnica === TECNICA.FLECHA) ej = ejercicioFlecha(w, alto, rng);
-  else if (tecnica === TECNICA.SALCHICHA) ej = ejercicioSalchicha(w, alto, rng);
-  else if (tecnica === TECNICA.CAJA2P) ej = ejercicioCaja2p(w, alto, rng);
+  else if (tecnica === TECNICA.SALCHICHAS) ej = ejercicioInterseccion(w, alto, "salchichas", rng);
+  else if (tecnica === TECNICA.FORMAS) ej = ejercicioInterseccion(w, alto, "formas", rng);
+  else if (tecnica === TECNICA.MIXTA) ej = ejercicioInterseccion(w, alto, "mixta", rng);
   else ej = ejercicioLinea(w, alto, rng);
   return desplazarEjercicio(ej, reserva);
 }
@@ -177,201 +176,89 @@ export function trazosDemoJefe(escena, muestras = 48) {
 }
 
 
-const FLECHA_LARGO = Object.freeze([0.55, 0.8]);
-const FLECHA_ANCHO_CERCA = Object.freeze([0.08, 0.12]);
-const FLECHA_ANCHO_LEJOS = Object.freeze([0.02, 0.045]);
-const FLECHA_MUESTRAS = 28;
-const SALCHICHA_LARGO = Object.freeze([0.42, 0.62]);
-const SALCHICHA_RADIO = Object.freeze([0.07, 0.1]);
-const CAJA2P_LADO = Object.freeze([0.28, 0.38]);
-const CAJA2P_FONDO = Object.freeze([0.38, 0.52]);
-const CAJA2P_HORIZONTE = Object.freeze([0.08, 0.16]);
 
-function bezier(p0, p1, p2, p3, t) {
-  const u = 1 - t;
-  return {
-    x: u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x,
-    y: u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y,
-  };
+function modoDeTecnica(tecnica) {
+  if (tecnica === TECNICA.SALCHICHAS) return "salchichas";
+  if (tecnica === TECNICA.FORMAS) return "formas";
+  if (tecnica === TECNICA.MIXTA) return "mixta";
+  return "formas";
 }
 
-function polilineaBezier(p0, p1, p2, p3, n) {
-  return Array.from({ length: n }, (_, i) => bezier(p0, p1, p2, p3, i / (n - 1)));
-}
-
-function desplazarPoly(poly, nx, ny, d) {
-  return poly.map((p) => ({ x: p.x + nx * d, y: p.y + ny * d }));
-}
-
-export function ejercicioFlecha(w, h, rng = Math.random) {
-  const corto = Math.min(w, h);
-  const margen = w * MARGEN;
-  const p0 = { x: margen + rng() * (w * 0.25), y: h * (0.55 + rng() * 0.25) };
-  const p3 = { x: w - margen - rng() * (w * 0.15), y: h * (0.18 + rng() * 0.2) };
-  if (rng() < 0.5) { const t = p0.x; p0.x = w - p0.x; p3.x = w - p3.x; }
-  const p1 = { x: p0.x + (p3.x - p0.x) * 0.25, y: p0.y - corto * (0.18 + rng() * 0.15) };
-  const p2 = { x: p0.x + (p3.x - p0.x) * 0.7, y: p3.y + corto * (0.12 + rng() * 0.12) };
-  const centro = polilineaBezier(p0, p1, p2, p3, FLECHA_MUESTRAS);
-  const anchoCerca = corto * entre(rng, FLECHA_ANCHO_CERCA);
-  const anchoLejos = corto * entre(rng, FLECHA_ANCHO_LEJOS);
-  const izq = [];
-  const der = [];
-  for (let i = 0; i < centro.length; i++) {
-    const t = i / (centro.length - 1);
-    const a = centro[Math.max(0, i - 1)];
-    const b = centro[Math.min(centro.length - 1, i + 1)];
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const L = Math.hypot(dx, dy) || 1;
-    const nx = -dy / L;
-    const ny = dx / L;
-    const ancho = anchoCerca + (anchoLejos - anchoCerca) * t;
-    izq.push({ x: centro[i].x + nx * ancho, y: centro[i].y + ny * ancho });
-    der.push({ x: centro[i].x - nx * ancho, y: centro[i].y - ny * ancho });
+export function ejercicioInterseccion(w, h, modo, rng = Math.random) {
+  let escena = null;
+  for (let i = 0; i < 20; i++) {
+    const cam = crearCamara(w, h, rng);
+    const tipos = tipificarTorre(modo, rng);
+    escena = generarEscena(cam, tipos, rng, 40);
+    if (escena) break;
   }
+  if (!escena) {
+    for (const seed of [7, 42, 99, 123, 456, 789, 1024, 2048, 3333, 7777]) {
+      const r = seedRng(seed);
+      const cam = crearCamara(w, h, r);
+      const tipos = tipificarTorre(modo, r);
+      escena = generarEscena(cam, tipos, r, 80);
+      if (escena) break;
+    }
+  }
+  if (!escena) throw new Error("No se pudo generar la escena");
+  const pasos = escena.strokes.map((s, i) => ({
+    id: i,
+    tipo: s.tipo,
+    cerrado: Boolean(s.cerrado),
+    puntos: s.puntos.map((p) => ({ x: p.x, y: p.y })),
+    hint: s.hint,
+    forma: s.forma,
+  }));
   return {
-    tecnica: TECNICA.FLECHA,
-    centro,
-    bordes: [izq, der],
-    anchoCerca,
-    anchoLejos,
-    hechos: [],
-  };
-}
-
-export function ejercicioSalchicha(w, h, rng = Math.random) {
-  const corto = Math.min(w, h);
-  const largo = corto * entre(rng, SALCHICHA_LARGO);
-  const radio = corto * entre(rng, SALCHICHA_RADIO);
-  const ang = (rng() * 0.7 - 0.35) * Math.PI;
-  const ux = Math.cos(ang);
-  const uy = Math.sin(ang);
-  const mx = w * MARGEN + radio + Math.abs(ux) * largo / 2;
-  const my = h * MARGEN + radio + Math.abs(uy) * largo / 2;
-  const cx = mx < w - mx ? mx + rng() * (w - 2 * mx) : w / 2;
-  const cy = my < h - my ? my + rng() * (h - 2 * my) : h / 2;
-  const a = { x: cx - ux * largo / 2, y: cy - uy * largo / 2 };
-  const b = { x: cx + ux * largo / 2, y: cy + uy * largo / 2 };
-  const contornos = [0.35, 0.65].map((t) => {
-    const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-    const menor = radio * (0.4 + 0.15 * Math.abs(Math.sin(ang + t * 3)));
-    return { cx: p.x, cy: p.y, rx: menor, ry: radio, eje: { x: ux, y: uy }, t };
-  });
-  return {
-    tecnica: TECNICA.SALCHICHA,
-    a,
-    b,
-    radio,
-    eje: { x: ux, y: uy },
-    contornos,
-    hechos: [],
-  };
-}
-
-function haciaVp(p, vp, f) {
-  return { x: p.x + (vp.x - p.x) * f, y: p.y + (vp.y - p.y) * f };
-}
-
-export function ejercicioCaja2p(w, h, rng = Math.random) {
-  const horizonte = h * entre(rng, CAJA2P_HORIZONTE);
-  const sep = w * 0.5;
-  const vp1 = { x: w * (0.08 + rng() * 0.12), y: horizonte };
-  const vp2 = { x: w * (0.8 + rng() * 0.12), y: horizonte };
-  const lado = Math.min(w, h) * entre(rng, CAJA2P_LADO);
-  const x = w * 0.35 + rng() * w * 0.2;
-  const yMin = horizonte + h * 0.18;
-  const yMax = h * (1 - MARGEN) - lado;
-  const y = yMax > yMin ? yMin + rng() * (yMax - yMin) : Math.max(horizonte + 20, yMax);
-  const arriba = { x, y };
-  const abajo = { x, y: y + lado };
-  const fondo = entre(rng, CAJA2P_FONDO);
-  const a1 = haciaVp(arriba, vp1, fondo);
-  const a2 = haciaVp(arriba, vp2, fondo);
-  const b1 = haciaVp(abajo, vp1, fondo);
-  const b2 = haciaVp(abajo, vp2, fondo);
-  const aristas = [
-    { desde: arriba, hasta: a1, vp: 1 },
-    { desde: abajo, hasta: b1, vp: 1 },
-    { desde: arriba, hasta: a2, vp: 2 },
-    { desde: abajo, hasta: b2, vp: 2 },
-  ];
-  return {
-    tecnica: TECNICA.CAJA2P,
-    horizonte,
-    vp1,
-    vp2,
-    vertical: [arriba, abajo],
-    fondo: { a1, a2, b1, b2 },
-    aristas,
+    tecnica: modo === "salchichas" ? TECNICA.SALCHICHAS : modo === "mixta" ? TECNICA.MIXTA : TECNICA.FORMAS,
+    modo,
+    pasos,
+    horizonte: escena.horizonte,
+    vp1: escena.vp1,
+    vp2: escena.vp2,
+    formas: escena.formas,
     hechos: [],
   };
 }
 
 export function azarJefe2(rng = Math.random) {
-  return { horizonte: rng(), centroX: rng(), centroY: rng(), eje: rng(), lado: rng() };
+  return { seed: Math.floor(rng() * 1e9) };
 }
 
 export function escenaJefe2(w, h, arriba = 0, azar = null) {
-  const reserva = Math.max(0, Math.min(arriba, h * ESCENA_JEFE2.RESERVA_MAX));
+  const reserva = Math.max(0, Math.min(arriba, h * RESERVA_MAX));
   const alto = h - reserva;
-  const az = azar || { horizonte: 0.4, centroX: 0.5, centroY: 0.5, eje: 0.5, lado: 0.5 };
-  const horizonte = ESCENA_JEFE2.AZAR_HORIZONTE[0] + (ESCENA_JEFE2.AZAR_HORIZONTE[1] - ESCENA_JEFE2.AZAR_HORIZONTE[0]) * az.horizonte;
-  const hy = reserva + horizonte * alto;
-  const vp1 = { x: w * ESCENA_JEFE2.VP_MARGEN, y: hy };
-  const vp2 = { x: w * (1 - ESCENA_JEFE2.VP_MARGEN), y: hy };
-  const cx = ESCENA_JEFE2.AZAR_CENTRO_X[0] + (ESCENA_JEFE2.AZAR_CENTRO_X[1] - ESCENA_JEFE2.AZAR_CENTRO_X[0]) * az.centroX;
-  const cy = ESCENA_JEFE2.AZAR_CENTRO_Y[0] + (ESCENA_JEFE2.AZAR_CENTRO_Y[1] - ESCENA_JEFE2.AZAR_CENTRO_Y[0]) * az.centroY;
-  const centro = { x: cx * w, y: reserva + cy * alto };
-  const lado = ESCENA_JEFE2.LADO * Math.min(w, alto) * (0.9 + 0.2 * az.lado);
-  const ang = ESCENA_JEFE2.AZAR_EJE[0] + (ESCENA_JEFE2.AZAR_EJE[1] - ESCENA_JEFE2.AZAR_EJE[0]) * az.eje;
-  const eje = { x: Math.cos(ang), y: Math.sin(ang) };
-  const cilRadio = ESCENA_JEFE2.CIL_RADIO * Math.min(w, alto);
-  const fondo = ESCENA_JEFE2.FONDO;
-  const arribaV = { x: centro.x, y: centro.y - lado / 2 };
-  const abajoV = { x: centro.x, y: centro.y + lado / 2 };
-  const a1 = haciaVp(arribaV, vp1, fondo);
-  const a2 = haciaVp(arribaV, vp2, fondo);
-  const b1 = haciaVp(abajoV, vp1, fondo);
-  const b2 = haciaVp(abajoV, vp2, fondo);
-  const cilA = { x: centro.x - eje.x * lado * 0.55, y: centro.y - eje.y * lado * 0.55 };
-  const cilB = { x: centro.x + eje.x * lado * 0.55, y: centro.y + eje.y * lado * 0.55 };
-  const interseccion = Array.from({ length: 24 }, (_, i) => {
-    const t = i / 23;
-    const angulo = t * Math.PI * 2;
-    const px = -eje.y;
-    const py = eje.x;
-    return {
-      x: centro.x + Math.cos(angulo) * cilRadio * px * 0.9 + Math.sin(angulo) * cilRadio * 0.35 * eje.x,
-      y: centro.y + Math.cos(angulo) * cilRadio * py * 0.9 + Math.sin(angulo) * cilRadio * 0.35 * eje.y,
-    };
-  });
+  const rng = seedRng((azar && azar.seed) || 7);
+  const cam = crearCamara(w, alto, rng);
+  const tipos = tipificarTorre("jefe", rng);
+  let escena = generarEscena(cam, tipos, rng, 70);
+  if (!escena) {
+    for (const seed of [11, 13, 99, 101, 303, 505, 707, 909]) {
+      const r = seedRng(seed);
+      escena = generarEscena(crearCamara(w, alto, r), tipificarTorre("jefe", r), r, 90);
+      if (escena) break;
+    }
+  }
+  if (!escena) throw new Error("No se pudo generar el jefe");
+  const pasos = escena.strokes.map((s, i) => ({
+    id: i,
+    tipo: s.tipo,
+    cerrado: Boolean(s.cerrado),
+    puntos: s.puntos.map((p) => ({ x: p.x, y: p.y + reserva })),
+    hint: s.hint,
+    forma: s.forma,
+  }));
   return {
-    vp1, vp2, horizonte: hy, centro, lado, eje, cilRadio, cilA, cilB,
-    vertical: [arribaV, abajoV],
-    fondoPts: { a1, a2, b1, b2 },
-    interseccion,
+    horizonte: escena.horizonte + reserva,
+    vp1: { x: escena.vp1.x, y: escena.vp1.y + reserva },
+    vp2: { x: escena.vp2.x, y: escena.vp2.y + reserva },
+    formas: escena.formas,
+    pasos,
     w, h,
   };
 }
 
-export function trazosDemoJefe2(escena, muestras = 40) {
-  const { vp1, vp2, vertical, fondoPts, cilA, cilB, cilRadio, eje, interseccion } = escena;
-  const [arriba, abajo] = vertical;
-  const elipse = (c) => Array.from({ length: muestras + 1 }, (_, i) => {
-    const a = -Math.PI / 2 + (i / muestras) * Math.PI * 2;
-    const px = -eje.y;
-    const py = eje.x;
-    return { x: c.x + Math.cos(a) * cilRadio * px, y: c.y + Math.cos(a) * cilRadio * py + Math.sin(a) * cilRadio * 0.55 };
-  });
-  return [
-    { paso: "vertical", puntos: [arriba, abajo] },
-    { paso: "vertical", puntos: [fondoPts.a1, fondoPts.b1] },
-    { paso: "fuga", puntos: [arriba, fondoPts.a1] },
-    { paso: "fuga", puntos: [abajo, fondoPts.b1] },
-    { paso: "fuga", puntos: [arriba, fondoPts.a2] },
-    { paso: "fuga", puntos: [abajo, fondoPts.b2] },
-    { paso: "cilindro", puntos: elipse(cilA) },
-    { paso: "cilindro", puntos: elipse(cilB) },
-    { paso: "interseccion", puntos: interseccion },
-  ];
+export function trazosDemoJefe2(escena) {
+  return (escena.pasos || []).map((p) => ({ paso: p.tipo, puntos: p.puntos.map((q) => ({ x: q.x, y: q.y })) }));
 }

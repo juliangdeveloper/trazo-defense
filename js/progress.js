@@ -13,9 +13,9 @@ export const STATS = Object.freeze({
   nivel_linea: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de líneas, 1 a 5" },
   nivel_elipse: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de elipses, 1 a 5" },
   nivel_perspectiva: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de perspectiva, 1 a 5" },
-  nivel_flecha: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de flechas, 1 a 5" },
-  nivel_salchicha: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de salchichas, 1 a 5" },
-  nivel_caja2p: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de cajas en 2 puntos, 1 a 5" },
+  nivel_salchichas: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de salchichas, 1 a 5" },
+  nivel_formas: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de formas, 1 a 5" },
+  nivel_mixta: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "nivel actual de mixtas, 1 a 5" },
   tinta: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "tinta disponible" },
   tutorial_completado: { tipo: TIPO_STAT.VALOR_ACTUAL, unidad: "tutorial completado: 1 sí, 0 no" },
 });
@@ -28,7 +28,7 @@ export const LOGROS = Object.freeze([
   Object.freeze({ id: "elipse_nivel_3", cumple: (s) => s.nivel_elipse >= 3 }),
   Object.freeze({ id: "perspectiva_nivel_3", cumple: (s) => s.nivel_perspectiva >= 3 }),
   Object.freeze({ id: "jefe_punto_fuga", cumple: (s) => s.jefes_vencidos >= 1 }),
-  Object.freeze({ id: "flecha_nivel_3", cumple: (s) => s.nivel_flecha >= 3 }),
+  Object.freeze({ id: "salchichas_nivel_3", cumple: (s) => s.nivel_salchichas >= 3 }),
   Object.freeze({ id: "jefe_intersecciones", cumple: (s) => s.jefes_cap2 >= 1 }),
   Object.freeze({ id: "dias_practica_7", cumple: (s) => s.dias_practica >= 7 }),
 ]);
@@ -89,9 +89,37 @@ function migrarV1(raw) {
   return base;
 }
 
+function migrarV2(raw) {
+  const base = estadoInicial();
+  base.tinta = Math.max(0, numero(raw.tinta, 0));
+  const mapa = { flecha: "salchichas", salchicha: "formas", caja2p: "mixta", linea: "linea", elipse: "elipse", perspectiva: "perspectiva" };
+  for (const t of TECNICAS) {
+    const origen = Object.keys(mapa).find((k) => mapa[k] === t) || t;
+    const claveOld = origen;
+    base.mejoras[t] = Math.min(MEJORA.MAX, Math.max(0, Math.floor(numero(esObjeto(raw.mejoras) ? raw.mejoras[claveOld] : 0, 0))));
+    const lista = esObjeto(raw.recientes) && Array.isArray(raw.recientes[claveOld]) ? raw.recientes[claveOld] : [];
+    base.recientes[t] = lista.filter((r) => esObjeto(r) && Number.isFinite(r.p) && Number.isFinite(r.m)).slice(-NIVEL.VENTANA);
+    base.intentos[t] = Math.max(0, numero(esObjeto(raw.intentos) ? raw.intentos[claveOld] : 0, 0));
+    const hist = esObjeto(raw.historial) && esObjeto(raw.historial[claveOld]) ? raw.historial[claveOld] : {};
+    for (const dia of Object.keys(hist)) {
+      const d = hist[dia];
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dia) && esObjeto(d) && Number.isFinite(d.n) && Number.isFinite(d.suma) && d.n > 0) base.historial[t][dia] = { n: d.n, suma: d.suma };
+    }
+  }
+  if (esObjeto(raw.contadores)) {
+    for (const k of Object.keys(base.contadores)) base.contadores[k] = Math.max(0, numero(raw.contadores[k], 0));
+  }
+  base.ultimoBonus = typeof raw.ultimoBonus === "string" ? raw.ultimoBonus : "";
+  base.tutorialVisto = raw.tutorialVisto === true;
+  const cap = numero(raw.capitulo, CAPITULO.UNO);
+  base.capitulo = cap === CAPITULO.DOS ? CAPITULO.DOS : CAPITULO.UNO;
+  return base;
+}
+
 export function normalizarEstado(raw) {
   if (!esObjeto(raw)) return estadoInicial();
   if (raw.v === 1) return migrarV1(raw);
+  if (raw.v === 2) return migrarV2(raw);
   if (raw.v !== SAVE_VERSION) return estadoInicial();
   const base = estadoInicial();
   base.tinta = Math.max(0, numero(raw.tinta, 0));
@@ -310,9 +338,9 @@ export function statsMeta(estado) {
     nivel_linea: nivelTecnica(estado, TECNICA.LINEA),
     nivel_elipse: nivelTecnica(estado, TECNICA.ELIPSE),
     nivel_perspectiva: nivelTecnica(estado, TECNICA.PERSPECTIVA),
-    nivel_flecha: nivelTecnica(estado, TECNICA.FLECHA),
-    nivel_salchicha: nivelTecnica(estado, TECNICA.SALCHICHA),
-    nivel_caja2p: nivelTecnica(estado, TECNICA.CAJA2P),
+    nivel_salchichas: nivelTecnica(estado, TECNICA.SALCHICHAS),
+    nivel_formas: nivelTecnica(estado, TECNICA.FORMAS),
+    nivel_mixta: nivelTecnica(estado, TECNICA.MIXTA),
     tinta: estado.tinta,
     tutorial_completado: estado.tutorialVisto ? 1 : 0,
   };
