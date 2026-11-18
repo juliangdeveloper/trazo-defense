@@ -452,7 +452,7 @@ function slotCentro(slot, total, rng) {
   return v3(base.x + entre(rng, -0.06, 0.06), base.y + entre(rng, -0.05, 0.05), base.z + entre(rng, -0.06, 0.06));
 }
 
-function crearForma(tipo, rng, slot = 0, sceneYaw = 0, total = 2) {
+function crearForma(tipo, rng, slot = 0, sceneYaw = 0, total = 2, cam = null, previo = null) {
   const base = slotCentro(slot, total, rng);
   if (tipo === PRIMITIVA.CAJA) {
     const s = entre(rng, 0.7, 1.05);
@@ -475,11 +475,18 @@ function crearForma(tipo, rng, slot = 0, sceneYaw = 0, total = 2) {
     const s = entre(rng, 0.7, 1.05);
     return { tipo, c: base, sx: s, sy: s * entre(rng, 0.85, 1.15), sz: s, yaw: sceneYaw, slot };
   }
-  const flat = norm(rotY(v3(entre(rng, 0.6, 1), 0, entre(rng, -0.5, 0.5)), sceneYaw + entre(rng, -0.35, 0.35)));
-  const flat2 = norm(v3(flat.x, entre(rng, -0.12, 0.22), flat.z));
   const largo = entre(rng, 1.1, 1.55);
   const r = entre(rng, 0.2, 0.3);
-  return { tipo: PRIMITIVA.SALCHICHA, a: add(base, mul(flat2, -largo / 2)), b: add(base, mul(flat2, largo / 2)), r, c: base, slot };
+  const plano = previo && previo.tipo === PRIMITIVA.SALCHICHA
+    ? previo.plano + (rng() < 0.5 ? -1 : 1) * entre(rng, 0.75, 1.35)
+    : entre(rng, -0.6, 0.6);
+  const fondo = (rng() < 0.5 ? -1 : 1) * entre(rng, 0.38, 0.95);
+  const enPantalla = cam
+    ? add(mul(cam.right, Math.cos(plano)), mul(cam.up, Math.sin(plano)))
+    : rotY(v3(Math.cos(plano), Math.sin(plano), 0), sceneYaw);
+  const haciaCam = cam ? mul(cam.forward, -1) : rotY(v3(0, 0, 1), sceneYaw);
+  const eje = norm(add(mul(enPantalla, Math.cos(fondo)), mul(haciaCam, Math.sin(fondo))));
+  return { tipo: PRIMITIVA.SALCHICHA, a: add(base, mul(eje, -largo / 2)), b: add(base, mul(eje, largo / 2)), r, c: base, slot, plano };
 }
 
 function nudgeTogether(a, b) {
@@ -697,7 +704,8 @@ function tagStroke(st, formaIdx) {
 
 export function generarEscena(cam, tipos, rng = Math.random, intentos = 70) {
   for (let n = 0; n < intentos; n++) {
-    const formas = tipos.map((t, i) => crearForma(t, rng, i, cam.sceneYaw || 0, tipos.length));
+    const formas = [];
+    tipos.forEach((t, i) => formas.push(crearForma(t, rng, i, cam.sceneYaw || 0, tipos.length, cam, formas.filter((f) => f.tipo === PRIMITIVA.SALCHICHA).pop() || null)));
     emparejar(formas, rng);
     let strokes = [];
     for (let i = 0; i < formas.length; i++) {

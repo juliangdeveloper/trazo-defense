@@ -16,7 +16,7 @@
   - **Elipse:** dibújala dentro de la caja. Se mide ajuste, cierre y temblor.
   - **Perspectiva:** cierra un cubo en un punto de fuga con 3 rectas. Se mide convergencia, cierre y rectitud.
 - **Capítulo 2 · Intersecciones** (cámbialo cuando quieras con el selector Cap. 1 / Cap. 2 arriba en Jugar; el jefe del 2 pide sus propios mínimos)
-  - **Salchichas:** dos salchichas que se cruzan al azar. Cada una se dibuja como en Drawabox: primero la silueta completa (cápsula con extremos redondos), luego dos curvas de contorno y al final la línea donde se cruzan.
+  - **Salchichas:** dos salchichas que se cruzan en ángulo, inclinadas hacia o desde ti para que las curvas de contorno se vean curvas. Cada una se dibuja como en Drawabox: primero la silueta completa (cápsula con extremos redondos), luego dos curvas de contorno y al final la línea donde se cruzan.
   - **Formas:** dos primitivas geométricas (caja, cilindro, cono, esfera o pirámide) en un mismo espacio de 2 puntos. Dibuja cada forma a través (la pirámide: primero la base, luego las aristas a la cúspide) y luego la intersección.
   - **Mixta:** una salchicha y una primitiva geométrica compartiendo espacio.
 - Las tres torres del capítulo activo están disponibles desde el inicio. En una oleada los monstruos mezclan técnicas y el que va primero elige la torre y el ejercicio.
