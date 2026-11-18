@@ -211,6 +211,7 @@ export function ejercicioInterseccion(w, h, modo, rng = Math.random) {
     forma: s.forma,
     formaIdx: s.formaIdx ?? 0,
     necesitaPerspectiva: Boolean(s.necesitaPerspectiva),
+    oculto: s.oculto || [],
   }));
   return {
     tecnica: modo === "salchichas" ? TECNICA.SALCHICHAS : modo === "mixta" ? TECNICA.MIXTA : TECNICA.FORMAS,
@@ -220,6 +221,7 @@ export function ejercicioInterseccion(w, h, modo, rng = Math.random) {
     vp1: escena.vp1,
     vp2: escena.vp2,
     formas: escena.formas,
+    orden: escena.orden || [],
     hechos: [],
   };
 }
@@ -252,12 +254,14 @@ export function escenaJefe2(w, h, arriba = 0, azar = null) {
     forma: s.forma,
     formaIdx: s.formaIdx ?? 0,
     necesitaPerspectiva: Boolean(s.necesitaPerspectiva),
+    oculto: s.oculto || [],
   }));
   return {
     horizonte: escena.horizonte + reserva,
     vp1: { x: escena.vp1.x, y: escena.vp1.y + reserva },
     vp2: { x: escena.vp2.x, y: escena.vp2.y + reserva },
     formas: escena.formas,
+    orden: escena.orden || [],
     pasos,
     w, h,
   };

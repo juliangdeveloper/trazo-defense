@@ -842,8 +842,7 @@ export function calificarAtaque2(c, puntos, escena, clasificados = [], presiones
     [DIMENSION.PROPORCION]: proporcion,
     [DIMENSION.PRESION]: presion,
   };
-  const niveles = {};
-  for (const d of DIMENSIONES) niveles[d.id] = nivelAtaque(valores[d.id]);
+  const niveles = DIMENSIONES.map((d) => nivelAtaque(valores[d.id]));
   const media = Object.values(valores).reduce((s, v) => s + v, 0) / DIMENSIONES.length;
-  return { valores, niveles, media, tipo: c.tipo };
+  return { valores, niveles, media, tipo: c.tipo, lapiz: Boolean(presiones) };
 }

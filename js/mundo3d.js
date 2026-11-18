@@ -73,8 +73,14 @@ export function proyectar(cam, p) {
 function proyectarPoly(cam, pts) {
   return pts.map((p) => {
     const s = proyectar(cam, p);
-    return { x: s.x, y: s.y, z: s.z };
+    return { x: s.x, y: s.y, z: s.z, w: p };
   });
+}
+
+function segmento3(a, b, n = 24) {
+  const out = [];
+  for (let i = 0; i <= n; i++) out.push(mix(a, b, i / n));
+  return out;
 }
 
 function enCampo(pts, w, h, margen = 0.06) {
@@ -321,6 +327,7 @@ function suavizarCadena(pts, pasadas = 2) {
         x: (cur[i - 1].x + cur[i].x * 2 + cur[i + 1].x) * 0.25,
         y: (cur[i - 1].y + cur[i].y * 2 + cur[i + 1].y) * 0.25,
         z: cur[i].z,
+        w: cur[i].w,
       });
     }
     next.push(cur[cur.length - 1]);
@@ -344,6 +351,7 @@ function densificarSpline(pts, porSegmento = 4) {
         x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
         y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
         z: p1.z,
+        w: t < 0.5 ? p1.w : p2.w,
       });
     }
   }
@@ -362,13 +370,16 @@ function gradForm(form, p) {
 function pegarACorte(p, formA, formB) {
   let q = p;
   for (let k = 0; k < 24; k++) {
+    let mov = 0;
     for (const f of [formA, formB]) {
       const d = distToForm(q, f);
       const g = gradForm(f, q);
       const gg = dot(g, g);
       if (gg < 1e-8) return null;
       q = sub(q, mul(g, d / gg));
+      mov += Math.abs(d);
     }
+    if (mov < 1e-4) break;
   }
   return Math.abs(distToForm(q, formA)) < 0.004 && Math.abs(distToForm(q, formB)) < 0.004 ? q : null;
 }
@@ -405,12 +416,16 @@ export function interseccionFormas(formA, formB, cam, eps = 0.055) {
     if (Math.abs(distToForm(p, formA)) <= eps) hits.push(p);
   }
   if (hits.length < 12) return [];
-  const kept = [];
+  const semillas = [];
   for (const h of hits) {
+    if (semillas.every((q) => len(sub(h, q)) > 0.03)) semillas.push(h);
+    if (semillas.length > 140) break;
+  }
+  const kept = [];
+  for (const h of semillas) {
     const p = pegarACorte(h, formA, formB);
     if (!p) continue;
     if (kept.every((q) => len(sub(p, q)) > 0.025)) kept.push(p);
-    if (kept.length > 160) break;
   }
   if (kept.length < 8) return [];
   const orden = cadena3d(kept, 0.16);
@@ -420,7 +435,7 @@ export function interseccionFormas(formA, formB, cam, eps = 0.055) {
   let chain = suavizarCadena(proj, 2);
   chain = densificarSpline(chain, 3);
   const a = chain[0], b = chain[chain.length - 1];
-  if (Math.hypot(a.x - b.x, a.y - b.y) < 24) chain.push({ x: a.x, y: a.y, z: a.z });
+  if (Math.hypot(a.x - b.x, a.y - b.y) < 24) chain.push({ x: a.x, y: a.y, z: a.z, w: a.w });
   return chain;
 }
 
@@ -440,7 +455,7 @@ function randomAxis(rng) {
 function slotCentro(slot, total, rng) {
   if (total <= 2) {
     const x = slot === 0 ? entre(rng, -0.35, -0.05) : entre(rng, 0.05, 0.35);
-    return v3(x, entre(rng, 0.35, 0.7), entre(rng, -0.2, 0.2));
+    return v3(x, entre(rng, 0.35, 0.7), entre(rng, -0.04, 0.04));
   }
   const arc = [
     v3(-0.55, 0.42, 0.05),
@@ -520,7 +535,7 @@ function strokesForForm(form, cam, formaIdx = 0) {
     const order = boxEdges();
     let first = true;
     for (const [i, j] of order) {
-      const pts = proyectarPoly(cam, [c[i], c[j]]);
+      const pts = proyectarPoly(cam, segmento3(c[i], c[j]));
       strokes.push({
         tipo: "arista",
         cerrado: false,
@@ -544,7 +559,7 @@ function strokesForForm(form, cam, formaIdx = 0) {
     for (const sign of [-1, 1]) {
       const p0 = add(a, mul(side, form.r * sign));
       const p1 = add(b, mul(side, form.r * sign));
-      strokes.push({ tipo: "arista", cerrado: false, puntos: proyectarPoly(cam, [p0, p1]), hint: "Une los extremos del cilindro", forma: form.tipo });
+      strokes.push({ tipo: "arista", cerrado: false, puntos: proyectarPoly(cam, segmento3(p0, p1)), hint: "Une los extremos del cilindro", forma: form.tipo });
     }
   } else if (form.tipo === PRIMITIVA.CONO) {
     const { f } = basisFromAxis(form.axis);
@@ -555,7 +570,7 @@ function strokesForForm(form, cam, formaIdx = 0) {
     const side = norm(cross(f, toCam));
     for (const sign of [-1, 1]) {
       const p = add(base, mul(side, form.r * sign));
-      strokes.push({ tipo: "arista", cerrado: false, puntos: proyectarPoly(cam, [form.apex, p]), hint: "Borde hasta la punta", forma: form.tipo });
+      strokes.push({ tipo: "arista", cerrado: false, puntos: proyectarPoly(cam, segmento3(form.apex, p)), hint: "Borde hasta la punta", forma: form.tipo });
     }
   } else if (form.tipo === PRIMITIVA.ESFERA) {
     const toCam = norm(sub(cam.eye, form.c));
@@ -573,10 +588,10 @@ function strokesForForm(form, cam, formaIdx = 0) {
       add(form.c, rotY(v3(-form.sx / 2, -form.sy / 2, form.sz / 2), form.yaw)),
     ];
     for (let i = 0; i < 4; i++) {
-      strokes.push({ tipo: "arista", cerrado: false, puntos: proyectarPoly(cam, [base[i], base[(i + 1) % 4]]), hint: i === 0 ? hintNombre[form.tipo] : "Cierra la base", forma: form.tipo });
+      strokes.push({ tipo: "arista", cerrado: false, puntos: proyectarPoly(cam, segmento3(base[i], base[(i + 1) % 4])), hint: i === 0 ? hintNombre[form.tipo] : "Cierra la base", forma: form.tipo });
     }
     for (let i = 0; i < 4; i++) {
-      strokes.push({ tipo: "arista", cerrado: false, puntos: proyectarPoly(cam, [base[i], apex]), hint: "Sube a la cúspide", forma: form.tipo });
+      strokes.push({ tipo: "arista", cerrado: false, puntos: proyectarPoly(cam, segmento3(base[i], apex)), hint: "Sube a la cúspide", forma: form.tipo });
     }
   } else if (form.tipo === PRIMITIVA.SALCHICHA) {
     const axis = norm(sub(form.b, form.a));
@@ -696,10 +711,51 @@ function aplicarEncuadre(p, xf) {
   return { x: (p.x - xf.cx) * xf.s + xf.tx, y: (p.y - xf.cy) * xf.s + xf.ty };
 }
 
+function oculto(cam, formas, p) {
+  const d = sub(p, cam.eye);
+  const total = len(d);
+  const dir = mul(d, 1 / (total || 1));
+  let t = 0.05;
+  while (t < total - 0.04) {
+    const q = add(cam.eye, mul(dir, t));
+    let min = Infinity;
+    for (const f of formas) {
+      const s = distToForm(q, f);
+      if (s < -0.012) return true;
+      if (s < min) min = s;
+    }
+    t += Math.max(0.012, min);
+  }
+  return false;
+}
+
+function marcarOcultos(cam, formas, strokes) {
+  for (const st of strokes) {
+    st.oculto = st.puntos.map((p) => (p.w ? oculto(cam, formas, p.w) : false));
+  }
+}
+
+function ordenProfundidad(cam, formas) {
+  return formas
+    .map((f, i) => ({ i, d: len(sub(f.c || f.apex || cam.target, cam.eye)) }))
+    .sort((a, b) => b.d - a.d)
+    .map((x) => x.i);
+}
+
 function tagStroke(st, formaIdx) {
   st.formaIdx = formaIdx;
   st.necesitaPerspectiva = st.forma === "caja" || st.forma === "piramide";
   return st;
+}
+
+function encuadreViable(cam, formas, strokes, fill) {
+  const box = bboxSpan(allProjectedPoints(strokes));
+  if (!(box.w > 1 && box.h > 1)) return false;
+  const s = Math.min((cam.w * fill) / box.w, (cam.h * fill) / box.h);
+  if (box.w * s < cam.w * 0.55 || box.h * s < cam.h * 0.4) return false;
+  if (formas.length <= 2) return formas.length < 2 || formsIntersect(formas[0], formas[1]);
+  for (let i = 0; i < formas.length - 1; i++) if (!formsIntersect(formas[i], formas[i + 1])) return false;
+  return true;
 }
 
 export function generarEscena(cam, tipos, rng = Math.random, intentos = 70) {
@@ -723,6 +779,7 @@ export function generarEscena(cam, tipos, rng = Math.random, intentos = 70) {
       }
       strokes = keep;
     }
+    if (!encuadreViable(cam, formas, strokes, formas.length >= 3 ? 0.76 : 0.8)) continue;
     const cortes = [];
     const pares = formas.length <= 2
       ? [[0, 1]]
@@ -742,7 +799,7 @@ export function generarEscena(cam, tipos, rng = Math.random, intentos = 70) {
         }, Math.max(i, j)));
       }
     }
-    if (!cortes.length) continue;
+    if (cortes.length < pares.length) continue;
     const todos = [...strokes, ...cortes];
     const xf = encuadrarStrokes(todos, cam, formas.length >= 3 ? 0.76 : 0.8);
     if (!escenaValida(cam, formas, todos)) continue;
@@ -754,7 +811,8 @@ export function generarEscena(cam, tipos, rng = Math.random, intentos = 70) {
       vps.vp1.y = vps.horizonte;
       vps.vp2.y = vps.horizonte;
     }
-    return { formas, strokes: todos, ...vps, cam };
+    marcarOcultos(cam, formas, todos);
+    return { formas, strokes: todos, ...vps, cam, orden: ordenProfundidad(cam, formas) };
   }
   return null;
 }

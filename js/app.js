@@ -32,6 +32,9 @@ const COLOR = Object.freeze({
   PAPEL: "#fffdf8",
 });
 const FEEDBACK_MS = 650;
+const SOLIDO_MS = 2000;
+const DPR_CAMPO = 2;
+const RELLENO_SOLIDO = "#e9ecf9";
 const TRANSICION_MS = 300;
 const MARCA_MS = 1200;
 const MARCA_MARGEN = 8;
@@ -141,9 +144,9 @@ function fmt(v, dec = 1) {
   return Number.isFinite(v) ? v.toLocaleString("es-CO", { minimumFractionDigits: dec, maximumFractionDigits: dec }) : "–";
 }
 
-function ajustarCanvas(canvas) {
+function ajustarCanvas(canvas, dprMax = 3) {
   const r = canvas.getBoundingClientRect();
-  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  const dpr = Math.min(dprMax, window.devicePixelRatio || 1);
   const w = Math.max(1, Math.round(r.width));
   const hh = Math.max(1, Math.round(r.height));
   if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(hh * dpr)) {
@@ -160,7 +163,7 @@ const campoWrap = $("#campo-wrap");
 const torresEl = $("#torres");
 const pad = $("#pad");
 const lienzoDestello = $("#destello");
-let tamCampo = ajustarCanvas(campo);
+let tamCampo = ajustarCanvas(campo, DPR_CAMPO);
 let tamDestello = ajustarCanvas(lienzoDestello);
 let tamPad = ajustarCanvas(pad);
 
@@ -345,6 +348,75 @@ function trazar(ctx, puntos, color, ancho) {
   ctx.stroke();
 }
 
+function trazarTramos(ctx, puntos, oculto, color, ancho, alfaOculto, soloOcultos = null) {
+  if (!puntos || puntos.length < 2) return;
+  if (!oculto || oculto.length !== puntos.length) {
+    if (soloOcultos !== true) trazar(ctx, puntos, color, ancho);
+    return;
+  }
+  const base = ctx.globalAlpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = ancho;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const tapado of [false, true]) {
+    if (soloOcultos !== null && soloOcultos !== tapado) continue;
+    ctx.globalAlpha = tapado ? base * alfaOculto : base;
+    ctx.beginPath();
+    let abierto = false;
+    for (let i = 0; i < puntos.length - 1; i++) {
+      const seg = Boolean(oculto[i] || oculto[i + 1]);
+      if (seg !== tapado) { abierto = false; continue; }
+      if (!abierto) { ctx.moveTo(puntos[i].x, puntos[i].y); abierto = true; }
+      ctx.lineTo(puntos[i + 1].x, puntos[i + 1].y);
+    }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = base;
+}
+
+function envolvente(pts) {
+  const p = pts.map((q) => [q.x, q.y]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (p.length < 3) return p;
+  const cruz = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const abajo = [];
+  for (const q of p) { while (abajo.length >= 2 && cruz(abajo[abajo.length - 2], abajo[abajo.length - 1], q) <= 0) abajo.pop(); abajo.push(q); }
+  const arriba = [];
+  for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (arriba.length >= 2 && cruz(arriba[arriba.length - 2], arriba[arriba.length - 1], q) <= 0) arriba.pop(); arriba.push(q); }
+  return abajo.slice(0, -1).concat(arriba.slice(0, -1));
+}
+
+function pintarSolido(ctx, ej) {
+  const porForma = new Map();
+  for (const paso of ej.pasos) {
+    if (paso.tipo === "interseccion") continue;
+    const k = paso.formaIdx ?? 0;
+    if (!porForma.has(k)) porForma.set(k, []);
+    porForma.get(k).push(...paso.puntos);
+  }
+  const orden = (ej.orden && ej.orden.length ? ej.orden : [...porForma.keys()]).filter((k) => porForma.has(k));
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  for (const h of ej.hechos) trazarLibre(ctx, h.puntos, colorPuntaje(h.r.puntaje));
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = RELLENO_SOLIDO;
+  ctx.beginPath();
+  for (const k of orden) {
+    const casco = envolvente(porForma.get(k));
+    if (casco.length < 3) continue;
+    casco.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.closePath();
+  }
+  ctx.fill("nonzero");
+  ctx.setLineDash([4, 5]);
+  ctx.globalAlpha = 0.28;
+  for (const paso of ej.pasos) trazarTramos(ctx, paso.puntos, paso.oculto, COLOR.TINTA, 1.3, 1, true);
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+  for (const paso of ej.pasos) trazarTramos(ctx, paso.puntos, paso.oculto, COLOR.TINTA, paso.tipo === "interseccion" ? 2.8 : 2.2, 1, false);
+  ctx.restore();
+}
+
 function presionDe(p, conLapiz) {
   return conLapiz && PRESION.has(p) ? PRESION.get(p) : TRAZO_LIBRE.PRESION_FIJA;
 }
@@ -419,15 +491,11 @@ function pintarInterseccion(ctx, ej, mostrarIdeal) {
   const hechas = new Set(ej.hechos.map((h) => h.paso));
   const actual = ej.hechos.length;
   const formaAct = formaActualDe(ej.pasos, actual);
-  pintarGuiasPerspectiva(ctx, ej, ej.pasos[actual]);
-  if (mostrarIdeal) {
-    ctx.save();
-    ctx.globalAlpha = 0.12;
-    for (const paso of ej.pasos) {
-      if ((paso.formaIdx ?? 0) === formaAct || actual >= ej.pasos.length) trazar(ctx, paso.puntos, COLOR.TINTA, 1.8);
-    }
-    ctx.restore();
+  if (mostrarIdeal || actual >= ej.pasos.length) {
+    pintarSolido(ctx, ej);
+    return;
   }
+  pintarGuiasPerspectiva(ctx, ej, ej.pasos[actual]);
   ej.pasos.forEach((paso, i) => {
     if (hechas.has(i)) return;
     const mismo = (paso.formaIdx ?? 0) === formaAct;
@@ -435,8 +503,7 @@ function pintarInterseccion(ctx, ej, mostrarIdeal) {
     ctx.save();
     ctx.setLineDash(activo ? [8, 6] : [5, 6]);
     ctx.globalAlpha = activo ? 1 : (mismo ? 0.45 : 0.16);
-    const color = paso.tipo === "interseccion" ? "#a16207" : COLOR.GUIA;
-    trazar(ctx, paso.puntos, color, activo ? 3.2 : 2.2);
+    trazarTramos(ctx, paso.puntos, paso.oculto, COLOR.GUIA, activo ? 3.2 : 2.2, activo ? 0.45 : 0.35);
     ctx.restore();
     if (activo && paso.puntos.length) {
       punto(ctx, paso.puntos[0], 6, COLOR.ACENTO);
@@ -571,6 +638,7 @@ function pintarCapa() {
 }
 
 function componerPad() {
+  ui.padSucio = false;
   const { ctx, w, h: alto } = tamPad;
   if (!mismaFirma(capaFirma, firmaCapa())) pintarCapa();
   ctx.save();
@@ -579,7 +647,10 @@ function componerPad() {
   ctx.drawImage(capa, 0, 0);
   ctx.restore();
   if (ui.jefe.activo) pintarVivoJefe(ctx);
-  else if (!ui.feedback && ui.trazo) trazarLibre(ctx, ui.trazo, COLOR.TINTA, false);
+  else {
+    if (ui.demo) pintarDemo(ctx);
+    if (!ui.feedback && ui.trazo) trazarLibre(ctx, ui.trazo, COLOR.TINTA, false);
+  }
   pintarMarca(ctx, w, alto);
 }
 
@@ -631,7 +702,7 @@ function zonasLibres(ctx, w) {
   if (ui.jefe.activo && ui.jefe.escena) {
     const { fuga, centro } = ui.jefe.escena;
     const r = MARCA_EVITA_FUGA;
-    return [fuga, centro].map((p) => ({ x: p.x - r, y: p.y - r, w: r * 2, h: r * 2, peso: MARCA_PESO_FUGA }));
+    return [fuga, centro].filter(Boolean).map((p) => ({ x: p.x - r, y: p.y - r, w: r * 2, h: r * 2, peso: MARCA_PESO_FUGA }));
   }
   const ej = ui.feedback ? ui.feedback.ejercicio : ui.ejercicio;
   if (!ej || ej.tecnica !== TECNICA.PERSPECTIVA) return [];
@@ -848,9 +919,10 @@ function terminarMulti(ej, puntos, r, indice, clave, total, resumir, textoParcia
   pintarLectura({ ...totalR, linea: n, total }, dano);
   pintarPista();
   ui.feedback = { ejercicio: ej, trazo: null, color: colorPuntaje(totalR.puntaje) };
-  ui.bloqueoHasta = performance.now() + FEEDBACK_MS * 1.5;
+  const espera = ej.pasos ? SOLIDO_MS : FEEDBACK_MS * 1.5;
+  ui.bloqueoHasta = performance.now() + espera;
   pintarPad();
-  ui.timerSiguiente = setTimeout(siguienteEjercicio, FEEDBACK_MS * 1.5);
+  ui.timerSiguiente = setTimeout(siguienteEjercicio, espera);
   pintarHud();
 }
 
@@ -971,7 +1043,7 @@ conectarLienzo(pad, {
       ui.objetivoBloqueado = objetivo ? objetivo.id : null;
     }
     ui.trazo = [p];
-    pintarPad();
+    componerPad();
   },
   mover(lista) {
     if (!ui.trazo) return;
@@ -982,7 +1054,7 @@ conectarLienzo(pad, {
       ui.trazo.push(p);
       nuevos += 1;
     }
-    if (nuevos) componerPad();
+    if (nuevos) ui.padSucio = true;
   },
   terminar(cancelado) {
     const puntos = ui.trazo;
@@ -1248,8 +1320,41 @@ function insignia(ctx, t, r) {
   ctx.stroke();
 }
 
+const fondoCampo = document.createElement("canvas");
+let firmaFondo = "";
+let firmaQuieto = "";
+
+function campoQuieto() {
+  return !ui.oleada && !ui.jefe.activo && !ui.proyectiles.length && !ui.textos.length;
+}
+
 function pintarCampo(ahora) {
   const { ctx, w, h: alto } = tamCampo;
+  const firma = `${campo.width}x${campo.height}x${w}x${alto}`;
+  if (campoQuieto()) {
+    if (firmaQuieto === `${firma}x${torresEl.offsetTop}`) return;
+    firmaQuieto = `${firma}x${torresEl.offsetTop}`;
+  } else firmaQuieto = "";
+  if (firmaFondo !== firma) {
+    fondoCampo.width = campo.width;
+    fondoCampo.height = campo.height;
+    const fctx = fondoCampo.getContext("2d");
+    fctx.setTransform(campo.width / w, 0, 0, campo.height / alto, 0, 0);
+    pintarFondoCampo(fctx, w, alto);
+    firmaFondo = firma;
+  }
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(fondoCampo, 0, 0);
+  ctx.restore();
+  const s = escalaCampo();
+  const pts = CAMINO.map(([x, y]) => [x * w, y * alto]);
+  const [bx, by] = pts[pts.length - 1];
+  campo.dataset.base = JSON.stringify({ x: Math.round(bx), y: Math.round(by), h: alto });
+  pintarVivoCampo(ctx, ahora, w, alto, s, bx, by);
+}
+
+function pintarFondoCampo(ctx, w, alto) {
   ctx.clearRect(0, 0, w, alto);
   ctx.fillStyle = "#efe9dc";
   ctx.fillRect(0, 0, w, alto);
@@ -1279,7 +1384,9 @@ function pintarCampo(ahora) {
   ctx.strokeStyle = COLOR.TENUE;
   for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(-11, -5 + i * 6); ctx.lineTo(11, -5 + i * 6); ctx.stroke(); }
   ctx.restore();
-  campo.dataset.base = JSON.stringify({ x: Math.round(bx), y: Math.round(by), h: alto });
+}
+
+function pintarVivoCampo(ctx, ahora, w, alto, s, bx, by) {
   if (ui.oleada) {
     ctx.fillStyle = COLOR.TINTA;
     ctx.font = `600 ${Math.round(13 * s)}px -apple-system, system-ui, sans-serif`;
@@ -1352,6 +1459,7 @@ function pintarCampo(ahora) {
 let ultimoFrame = performance.now();
 let ultimoHud = 0;
 function bucle(ahora) {
+  requestAnimationFrame(bucle);
   const dt = Math.min(DT_MAX_MS, ahora - ultimoFrame);
   ultimoFrame = ahora;
   const corre = ui.modo === MODO.OLEADA && ui.oleada && ui.pantalla === PANTALLA.JUGAR && !tutorial.activo() && document.visibilityState === "visible";
@@ -1377,12 +1485,8 @@ function bucle(ahora) {
   if (ui.pantalla === PANTALLA.JUGAR) {
     pintarCampo(ahora);
     pintarDestellos(ahora);
-    if (ui.marca || ui.demo) componerPad();
+    if (ui.marca || ui.demo || ui.padSucio) componerPad();
   }
-  
-requestAnimationFrame(bucle);
-
-
 }
 
 const COLOR_TRAZO_JEFE = Object.freeze({
@@ -1512,7 +1616,7 @@ function pararDemo() {
 const COLOR_TRAZO_JEFE2 = Object.freeze({
   [TIPO_TRAZO_JEFE2.FORMA]: COLOR.TINTA,
   [TIPO_TRAZO_JEFE2.CONTORNO]: COLOR.ACENTO,
-  [TIPO_TRAZO_JEFE2.INTERSECCION]: "#b7791f",
+  [TIPO_TRAZO_JEFE2.INTERSECCION]: "#7d86c9",
   [TIPO_TRAZO_JEFE2.DESCARTADO]: COLOR.MAL,
 });
 
@@ -1532,6 +1636,7 @@ function pintarCapaJefe(ctx) {
   const esc = ui.jefe.escena;
   if (!esc) return;
   if (estado.capitulo === CAPITULO.DOS) {
+    pintarGuiasJefe2(ctx, esc);
     const clas = clasificarTrazosJefe2(ui.jefe.trazos, esc);
     ui.jefe.trazos.forEach((t, i) => trazarLibre(ctx, t, COLOR_TRAZO_JEFE2[clas[i].tipo] || COLOR.TINTA));
     return;
@@ -1540,35 +1645,30 @@ function pintarCapaJefe(ctx) {
   ui.jefe.trazos.forEach((t, i) => trazarLibre(ctx, t, COLOR_TRAZO_JEFE[clas[i].tipo]));
 }
 
+function pintarGuiasJefe2(ctx, esc) {
+  const pasos = esc.pasos || [];
+  const hechos = ui.jefe.trazos.length;
+  const formaAct = formaActualDe(pasos, hechos);
+  pintarGuiasPerspectiva(ctx, esc, pasos[hechos]);
+  pasos.forEach((paso, i) => {
+    if (i < hechos) return;
+    const mismo = (paso.formaIdx ?? 0) === formaAct;
+    const activo = i === hechos;
+    ctx.save();
+    ctx.setLineDash(activo ? [8, 6] : [5, 6]);
+    ctx.globalAlpha = activo ? 1 : (mismo ? 0.4 : 0.14);
+    trazarTramos(ctx, paso.puntos, paso.oculto, COLOR.GUIA, activo ? 3.2 : 2.2, activo ? 0.45 : 0.35);
+    ctx.restore();
+    if (activo && paso.puntos[0]) punto(ctx, paso.puntos[0], 6, COLOR.ACENTO);
+  });
+}
+
 function pintarVivoJefe(ctx) {
   const esc = ui.jefe.escena;
   if (!esc) return;
   if (ui.trazo) trazarLibre(ctx, ui.trazo, COLOR.TINTA, false);
   if (ui.demo) pintarDemo(ctx);
-  if (estado.capitulo === CAPITULO.DOS) {
-    const pasos = esc.pasos || [];
-    const hechos = ui.jefe.trazos.length;
-    const formaAct = formaActualDe(pasos, hechos);
-    pintarGuiasPerspectiva(ctx, esc, pasos[hechos]);
-    ctx.save();
-    ctx.globalAlpha = 0.1;
-    for (const paso of pasos) {
-      if ((paso.formaIdx ?? 0) === formaAct) trazar(ctx, paso.puntos, COLOR.TINTA, 1.6);
-    }
-    ctx.restore();
-    pasos.forEach((paso, i) => {
-      if (i < hechos) return;
-      const mismo = (paso.formaIdx ?? 0) === formaAct;
-      const activo = i === hechos;
-      ctx.save();
-      ctx.setLineDash(activo ? [8, 6] : [5, 6]);
-      ctx.globalAlpha = activo ? 1 : (mismo ? 0.4 : 0.14);
-      trazar(ctx, paso.puntos, paso.tipo === "interseccion" ? "#a16207" : COLOR.GUIA, activo ? 3.2 : 2.2);
-      ctx.restore();
-      if (activo && paso.puntos[0]) punto(ctx, paso.puntos[0], 6, COLOR.ACENTO);
-    });
-    return;
-  }
+  if (estado.capitulo === CAPITULO.DOS) return;
   guiaJefe(ctx, esc.fuga, COLOR.MAL, ETIQUETA_GUIA.FUGA);
   guiaJefe(ctx, esc.centro, COLOR.ACENTO, ETIQUETA_GUIA.CENTRO);
 }
@@ -1702,7 +1802,10 @@ function centroDestello(radio) {
 
 function pintarDestellos(ahora) {
   const { ctx, w, h: alto } = tamDestello;
-  if (!ui.destellos.length && !pintarDestellos.sucio) return;
+  const hay = ui.destellos.length > 0 || pintarDestellos.sucio;
+  const vis = hay ? "" : "hidden";
+  if (lienzoDestello.style.visibility !== vis) lienzoDestello.style.visibility = vis;
+  if (!hay) return;
   ctx.clearRect(0, 0, w, alto);
   pintarDestellos.sucio = false;
   ui.destellos = ui.destellos.filter((d) => ahora - d.inicio < DESTELLO.MS);
@@ -2112,7 +2215,7 @@ function redimensionar() {
   if (ui.trazo) { ui.redimPendiente = true; return; }
   const antesW = tamPad.w;
   const antesH = tamPad.h;
-  tamCampo = ajustarCanvas(campo);
+  tamCampo = ajustarCanvas(campo, DPR_CAMPO);
   tamDestello = ajustarCanvas(lienzoDestello);
   tamPad = ajustarCanvas(pad);
   const cambio = antesW !== tamPad.w || antesH !== tamPad.h;

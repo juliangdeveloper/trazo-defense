@@ -19,6 +19,7 @@
   - **Salchichas:** dos salchichas que se cruzan en ángulo, inclinadas hacia o desde ti para que las curvas de contorno se vean curvas. Cada una se dibuja como en Drawabox: primero la silueta completa (cápsula con extremos redondos), luego dos curvas de contorno y al final la línea donde se cruzan.
   - **Formas:** dos primitivas geométricas (caja, cilindro, cono, esfera o pirámide) en un mismo espacio de 2 puntos. Dibuja cada forma a través (la pirámide: primero la base, luego las aristas a la cúspide) y luego la intersección.
   - **Mixta:** una salchicha y una primitiva geométrica compartiendo espacio.
+  - Las guías muestran más tenues las partes ocultas detrás de la otra forma. Al terminar aparece la figura sólida: líneas visibles firmes, ocultas punteadas y la costura de la intersección en el mismo color.
 - Las tres torres del capítulo activo están disponibles desde el inicio. En una oleada los monstruos mezclan técnicas y el que va primero elige la torre y el ejercicio.
 - Mejor trazo, más daño. Cada resultado muestra sus métricas.
 - **Mejoras:** cada 10 de tinta la torre de menor nivel del capítulo activo sube sola. Son 5 niveles que alternan más daño y más objetivos.
