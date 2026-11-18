@@ -16,6 +16,7 @@
   --right: env(safe-area-inset-right, 0px);
   --bar-h: 44px;
   --tab-h: 52px;
+  --torres-h: 84px;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
   color: var(--tinta);
   background: var(--papel);
@@ -127,8 +128,8 @@ button { font: inherit; color: inherit; }
 .campo-wrap .destello-capa { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 .leyenda-btn {
   position: absolute;
-  left: 6px;
-  top: 6px;
+  right: 6px;
+  bottom: calc(var(--torres-h) + 6px);
   z-index: 4;
   width: 44px;
   height: 44px;
@@ -147,9 +148,8 @@ button { font: inherit; color: inherit; }
   position: absolute;
   left: 0;
   right: 0;
-  top: 25%;
-  height: 54%;
-  border-top: 1px dashed rgba(75, 91, 214, 0.35);
+  top: 0;
+  bottom: var(--torres-h);
   border-bottom: 1px dashed rgba(75, 91, 214, 0.35);
   touch-action: none;
   -webkit-user-select: none;
@@ -188,7 +188,7 @@ button { font: inherit; color: inherit; }
   position: absolute;
   left: 0;
   right: 0;
-  top: 79%;
+  height: var(--torres-h);
   bottom: 0;
   display: flex;
   align-items: center;
@@ -291,7 +291,8 @@ button { font: inherit; color: inherit; }
   line-height: 1.3;
 }
 
-.lectura { display: flex; flex-wrap: wrap; gap: 4px 6px; flex: 0 0 58px; height: 58px; overflow: hidden; align-content: flex-start; font-size: 13px; font-variant-numeric: tabular-nums; }
+.lectura { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px 6px; flex: 0 0 30px; height: 30px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; font-size: 13px; font-variant-numeric: tabular-nums; }
+.lectura::-webkit-scrollbar { display: none; }
 .dato { padding: 3px 8px; border-radius: 999px; background: var(--hoja); border: 1px solid var(--linea); white-space: nowrap; }
 .dato b { font-weight: 700; }
 .dato.bien { color: var(--bien); border-color: #bfe3cf; }
@@ -433,16 +434,16 @@ button { font: inherit; color: inherit; }
   box-shadow: 0 8px 24px rgba(31, 29, 43, 0.2);
 }
 
-@media (max-height: 680px) and (max-width: 699px) {
+@media (max-height: 700px) and (max-width: 699px) {
+  :root { --bar-h: 36px; --tab-h: 46px; }
   #screen-jugar { gap: 6px; padding: 6px 0; }
-  .lectura { flex-basis: 30px; height: 30px; }
-  .lectura.puntos { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-  .lectura.puntos::-webkit-scrollbar { display: none; }
-  .hud { min-height: 44px; }
+  .tabbar button { flex-direction: row; gap: 6px; font-size: 12px; }
+  .tabbar svg { width: 20px; height: 20px; }
+  .bar-title { font-size: 15px; }
 }
 @media (min-width: 700px) {
   .view { max-width: 900px; padding: 0 calc(16px + var(--right)) 0 calc(16px + var(--left)); }
-  #screen-jugar { gap: 10px; padding: 12px 0; }
+  #screen-jugar { gap: 8px; padding: 8px 0; }
   .hud-estado { font-size: 15px; }
   .cap-opt { font-size: 14px; min-height: 34px; padding: 0 12px; }
   .zona-cabeza .pad-hint { font-size: 15px; }
@@ -450,6 +451,10 @@ button { font: inherit; color: inherit; }
   .cola-item svg { width: 18px; height: 18px; }
   .cola-tit { font-size: 13px; }
   .torres { gap: 10px; }
+  .lectura { flex-basis: 34px; height: 34px; font-size: 14px; }
+}
+@media (min-width: 700px) and (min-height: 900px) {
+  :root { --torres-h: 112px; }
   .torre-btn { width: 84px; padding: 3px 4px 4px; border-radius: 16px; gap: 2px; }
   .torre-btn svg { width: 56px; height: 56px; }
   .torre-nombre { font-size: 13px; }
@@ -459,18 +464,26 @@ button { font: inherit; color: inherit; }
   .mejora-btn small { font-size: 14px; }
   .mejora-btn.maximo .mas { font-size: 13px; }
 }
-@media (min-width: 900px) and (orientation: landscape) {
-  .view { max-width: 1400px; }
+@media (orientation: landscape) and (min-width: 700px) {
+  :root { --bar-h: 36px; --tab-h: 46px; }
+  .view { max-width: none; padding: 0 calc(10px + var(--right)) 0 calc(10px + var(--left)); }
+  .screen.scroll { max-width: 900px; margin: 0 auto; }
+  .tabbar button { flex-direction: row; gap: 6px; font-size: 13px; }
+  .tabbar svg { width: 20px; height: 20px; }
   #screen-jugar {
     display: grid;
-    grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas: "hud campo" "lectura campo";
-    gap: 12px 16px;
+    grid-template-areas: "hud lectura" "campo campo";
+    gap: 6px 12px;
+    padding: 6px 0;
   }
-  .hud { grid-area: hud; flex-wrap: wrap; }
+  .hud { grid-area: hud; min-height: 40px; }
+  .hud-izq { flex: 0 1 auto; }
+  .hud-estado { flex: 0 1 auto; }
+  .hud-acciones .chip-btn { min-height: 40px; }
   .campo-wrap { grid-area: campo; min-height: 0; }
-  .lectura { grid-area: lectura; height: auto; align-self: start; }
+  .lectura { grid-area: lectura; align-self: center; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
@@ -478,6 +491,8 @@ button { font: inherit; color: inherit; }
 
 
 @media (max-width: 420px) {
+  .zona-cabeza { flex-wrap: wrap; justify-content: flex-end; }
+  .zona-cabeza .pad-hint { order: 2; flex-basis: 100%; }
   .hud-estado { display: none; }
   .cap-opt { padding: 0 8px; font-size: 12px; min-height: 30px; }
   .hud-acciones { gap: 4px; }

@@ -4,11 +4,11 @@
 
 **[▶ Jugar ahora](https://juliangdeveloper.github.io/trazo-defense/)** · gratis, en el navegador, sin instalar
 
-<img src="img/screenshot.png" alt="Trazo Defense con selector de capítulo Cap. 1 / Cap. 2 en Jugar" width="320">
+<img src="img/screenshot.png" alt="Trazo Defense en iPad horizontal trazando una salchicha del capítulo 2" width="640">
 
 ## Cómo se juega
 
-- Los monstruos salen por arriba y bajan hacia tu cuaderno, abajo. Dibujas sobre el campo, en la franja entre ellos y la base, y la torre activa dispara.
+- Los monstruos salen por arriba y bajan hacia tu cuaderno, abajo. Dibujas sobre casi todo el campo, encima de las torres, y la torre activa dispara.
 - Elige el capítulo con **Cap. 1 / Cap. 2** en la fila superior de Jugar. Fuera de una oleada el cambio es inmediato.
 - Mientras dibujas, los monstruos van en cámara lenta. «Luego» muestra los próximos ejercicios.
 - **Capítulo 1**
@@ -16,8 +16,8 @@
   - **Elipse:** dibújala dentro de la caja. Se mide ajuste, cierre y temblor.
   - **Perspectiva:** cierra un cubo en un punto de fuga con 3 rectas. Se mide convergencia, cierre y rectitud.
 - **Capítulo 2 · Intersecciones** (cámbialo cuando quieras con el selector Cap. 1 / Cap. 2 arriba en Jugar; el jefe del 2 pide sus propios mínimos)
-  - **Salchichas:** dos salchichas que se cruzan al azar. Sigue siluetas, contornos y la línea de contacto.
-  - **Formas:** dos primitivas geométricas (caja, cilindro, cono, esfera o pirámide) en un mismo espacio de 2 puntos. Dibuja cada forma a través y luego la intersección.
+  - **Salchichas:** dos salchichas que se cruzan al azar. Cada una se dibuja como en Drawabox: primero la silueta completa (cápsula con extremos redondos), luego dos curvas de contorno y al final la línea donde se cruzan.
+  - **Formas:** dos primitivas geométricas (caja, cilindro, cono, esfera o pirámide) en un mismo espacio de 2 puntos. Dibuja cada forma a través (la pirámide: primero la base, luego las aristas a la cúspide) y luego la intersección.
   - **Mixta:** una salchicha y una primitiva geométrica compartiendo espacio.
 - Las tres torres del capítulo activo están disponibles desde el inicio. En una oleada los monstruos mezclan técnicas y el que va primero elige la torre y el ejercicio.
 - Mejor trazo, más daño. Cada resultado muestra sus métricas.

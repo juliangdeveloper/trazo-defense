@@ -191,24 +191,21 @@ function distPointCylinder(p, c, axis, r, h) {
 
 function distPointCone(p, apex, axis, rBase, h) {
   const { f } = basisFromAxis(axis);
-  const base = add(apex, mul(f, h));
   const d = sub(p, apex);
-  const t = clamp(dot(d, f), 0, h);
-  const along = add(apex, mul(f, t));
-  const rad = rBase * (t / (h || 1));
-  return len(sub(p, along)) - rad;
+  const t = dot(d, f);
+  const radial = len(sub(d, mul(f, t)));
+  const k = rBase / (h || 1);
+  const lateral = (radial - k * t) / Math.sqrt(1 + k * k);
+  return Math.max(lateral, t - h, -t);
 }
 
 function distPointPyramid(p, c, sx, sy, sz, yaw) {
-  const apex = add(c, rotY(v3(0, sy / 2, 0), yaw));
-  const base = [
-    add(c, rotY(v3(-sx / 2, -sy / 2, -sz / 2), yaw)),
-    add(c, rotY(v3(sx / 2, -sy / 2, -sz / 2), yaw)),
-    add(c, rotY(v3(sx / 2, -sy / 2, sz / 2), yaw)),
-    add(c, rotY(v3(-sx / 2, -sy / 2, sz / 2), yaw)),
-  ];
-  let best = Infinity;
-  for (const b of base) best = Math.min(best, len(sub(p, mix(apex, b, 0.5))) - Math.min(sx, sz) * 0.15);
+  const q = rotY(sub(p, c), -yaw);
+  const apex = v3(0, sy / 2, 0);
+  const d = sub(q, apex);
+  const caras = [v3(sy, sx / 2, 0), v3(-sy, sx / 2, 0), v3(0, sz / 2, sy), v3(0, sz / 2, -sy)];
+  let best = -q.y - sy / 2;
+  for (const n of caras) best = Math.max(best, dot(norm(n), d));
   return best;
 }
 
@@ -314,43 +311,6 @@ function sampleSurface(form, n = 900) {
   return pts;
 }
 
-function orderPolyline(pts) {
-  if (pts.length < 2) return pts.slice();
-  let start = 0;
-  for (let i = 1; i < pts.length; i++) if (pts[i].x < pts[start].x) start = i;
-  const left = pts.slice();
-  const out = [left.splice(start, 1)[0]];
-  while (left.length) {
-    let best = 0, bestD = Infinity;
-    const last = out[out.length - 1];
-    for (let i = 0; i < left.length; i++) {
-      const d = Math.hypot(left[i].x - last.x, left[i].y - last.y, (left[i].z || 0) - (last.z || 0));
-      if (d < bestD) { bestD = d; best = i; }
-    }
-    out.push(left.splice(best, 1)[0]);
-  }
-  return out;
-}
-
-function chainScreen(pts, maxGap = 28) {
-  if (pts.length < 2) return pts.slice();
-  let start = 0;
-  for (let i = 1; i < pts.length; i++) if (pts[i].x < pts[start].x) start = i;
-  const left = pts.slice();
-  const out = [left.splice(start, 1)[0]];
-  while (left.length) {
-    const last = out[out.length - 1];
-    let best = 0, bestD = Infinity;
-    for (let i = 0; i < left.length; i++) {
-      const d = Math.hypot(left[i].x - last.x, left[i].y - last.y);
-      if (d < bestD) { bestD = d; best = i; }
-    }
-    if (bestD > maxGap && out.length >= 8) break;
-    out.push(left.splice(best, 1)[0]);
-  }
-  return out;
-}
-
 function suavizarCadena(pts, pasadas = 2) {
   if (pts.length < 5) return pts.slice();
   let cur = pts.slice();
@@ -367,21 +327,6 @@ function suavizarCadena(pts, pasadas = 2) {
     cur = next;
   }
   return cur;
-}
-
-function quitarOutliers(pts) {
-  if (pts.length < 6) return pts;
-  const out = [pts[0]];
-  for (let i = 1; i < pts.length - 1; i++) {
-    const a = out[out.length - 1], b = pts[i], c = pts[i + 1];
-    const ab = Math.hypot(b.x - a.x, b.y - a.y);
-    const bc = Math.hypot(c.x - b.x, c.y - b.y);
-    const ac = Math.hypot(c.x - a.x, c.y - a.y);
-    if (ab + bc > ac * 1.85 && ab > 14) continue;
-    out.push(b);
-  }
-  out.push(pts[pts.length - 1]);
-  return out;
 }
 
 function densificarSpline(pts, porSegmento = 4) {
@@ -406,6 +351,51 @@ function densificarSpline(pts, porSegmento = 4) {
   return out;
 }
 
+function gradForm(form, p) {
+  const e = 1e-3;
+  const dx = distToForm(v3(p.x + e, p.y, p.z), form) - distToForm(v3(p.x - e, p.y, p.z), form);
+  const dy = distToForm(v3(p.x, p.y + e, p.z), form) - distToForm(v3(p.x, p.y - e, p.z), form);
+  const dz = distToForm(v3(p.x, p.y, p.z + e), form) - distToForm(v3(p.x, p.y, p.z - e), form);
+  return v3(dx / (2 * e), dy / (2 * e), dz / (2 * e));
+}
+
+function pegarACorte(p, formA, formB) {
+  let q = p;
+  for (let k = 0; k < 24; k++) {
+    for (const f of [formA, formB]) {
+      const d = distToForm(q, f);
+      const g = gradForm(f, q);
+      const gg = dot(g, g);
+      if (gg < 1e-8) return null;
+      q = sub(q, mul(g, d / gg));
+    }
+  }
+  return Math.abs(distToForm(q, formA)) < 0.004 && Math.abs(distToForm(q, formB)) < 0.004 ? q : null;
+}
+
+function cadena3d(pts, salto) {
+  if (pts.length < 2) return pts.slice();
+  let start = 0;
+  let lejos = -1;
+  for (let i = 0; i < pts.length; i++) {
+    const d = len(sub(pts[i], pts[0]));
+    if (d > lejos) { lejos = d; start = i; }
+  }
+  const left = pts.slice();
+  const out = [left.splice(start, 1)[0]];
+  while (left.length) {
+    const last = out[out.length - 1];
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < left.length; i++) {
+      const d = len(sub(left[i], last));
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    if (bestD > salto) break;
+    out.push(left.splice(best, 1)[0]);
+  }
+  return out;
+}
+
 export function interseccionFormas(formA, formB, cam, eps = 0.055) {
   const hits = [];
   for (const p of sampleSurface(formA, 2400)) {
@@ -416,18 +406,19 @@ export function interseccionFormas(formA, formB, cam, eps = 0.055) {
   }
   if (hits.length < 12) return [];
   const kept = [];
-  for (const p of hits) {
-    if (kept.every((q) => len(sub(p, q)) > 0.03)) kept.push(p);
-    if (kept.length > 100) break;
+  for (const h of hits) {
+    const p = pegarACorte(h, formA, formB);
+    if (!p) continue;
+    if (kept.every((q) => len(sub(p, q)) > 0.025)) kept.push(p);
+    if (kept.length > 160) break;
   }
-  const proj = proyectarPoly(cam, kept);
+  if (kept.length < 8) return [];
+  const orden = cadena3d(kept, 0.16);
+  if (orden.length < 8) return [];
+  const proj = proyectarPoly(cam, orden);
   if (proj.length < 8) return [];
-  let chain = chainScreen(proj, Math.max(18, cam.w * 0.065));
-  if (chain.length < 8) return [];
-  chain = quitarOutliers(chain);
-  chain = suavizarCadena(chain, 4);
+  let chain = suavizarCadena(proj, 2);
   chain = densificarSpline(chain, 3);
-  chain = suavizarCadena(chain, 2);
   const a = chain[0], b = chain[chain.length - 1];
   if (Math.hypot(a.x - b.x, a.y - b.y) < 24) chain.push({ x: a.x, y: a.y, z: a.z });
   return chain;
@@ -536,8 +527,9 @@ function strokesForForm(form, cam, formaIdx = 0) {
     const { f } = basisFromAxis(form.axis);
     const a = add(form.c, mul(f, -form.h / 2));
     const b = add(form.c, mul(f, form.h / 2));
-    const e0 = proyectarPoly(cam, circle3(a, form.axis, form.r, 48));
-    const e1 = proyectarPoly(cam, circle3(b, form.axis, form.r, 48));
+    const [cercano, lejano] = len(sub(cam.eye, a)) <= len(sub(cam.eye, b)) ? [a, b] : [b, a];
+    const e0 = proyectarPoly(cam, circle3(cercano, form.axis, form.r, 48));
+    const e1 = proyectarPoly(cam, circle3(lejano, form.axis, form.r, 48));
     strokes.push({ tipo: "elipse", cerrado: true, puntos: e0, hint: "Elipse cercana del cilindro", forma: form.tipo });
     strokes.push({ tipo: "elipse", cerrado: true, puntos: e1, hint: "Elipse lejana del cilindro", forma: form.tipo });
     const toCam = norm(sub(cam.eye, form.c));
@@ -563,7 +555,7 @@ function strokesForForm(form, cam, formaIdx = 0) {
     const sil = proyectarPoly(cam, circle3(form.c, toCam, form.r, 56));
     strokes.push({ tipo: "elipse", cerrado: true, puntos: sil, hint: "Contorno de la esfera", forma: form.tipo });
     const eqAxis = Math.abs(toCam.y) < 0.8 ? v3(0, 1, 0) : v3(1, 0, 0);
-    const eq = proyectarPoly(cam, circle3(form.c, eqAxis, form.r * 0.92, 48));
+    const eq = proyectarPoly(cam, circle3(form.c, eqAxis, form.r, 48));
     strokes.push({ tipo: "elipse", cerrado: true, puntos: eq, hint: "Ecuador de contorno", forma: form.tipo });
   } else if (form.tipo === PRIMITIVA.PIRAMIDE) {
     const apex = add(form.c, rotY(v3(0, form.sy / 2, 0), form.yaw));
@@ -573,42 +565,56 @@ function strokesForForm(form, cam, formaIdx = 0) {
       add(form.c, rotY(v3(form.sx / 2, -form.sy / 2, form.sz / 2), form.yaw)),
       add(form.c, rotY(v3(-form.sx / 2, -form.sy / 2, form.sz / 2), form.yaw)),
     ];
-    let first = true;
     for (let i = 0; i < 4; i++) {
-      strokes.push({ tipo: "arista", cerrado: false, puntos: proyectarPoly(cam, [base[i], base[(i + 1) % 4]]), hint: first ? hintNombre[form.tipo] : "Cierra la base", forma: form.tipo });
-      first = false;
-      strokes.push({ tipo: "arista", cerrado: false, puntos: proyectarPoly(cam, [apex, base[i]]), hint: "Sube a la cúspide", forma: form.tipo });
+      strokes.push({ tipo: "arista", cerrado: false, puntos: proyectarPoly(cam, [base[i], base[(i + 1) % 4]]), hint: i === 0 ? hintNombre[form.tipo] : "Cierra la base", forma: form.tipo });
+    }
+    for (let i = 0; i < 4; i++) {
+      strokes.push({ tipo: "arista", cerrado: false, puntos: proyectarPoly(cam, [base[i], apex]), hint: "Sube a la cúspide", forma: form.tipo });
     }
   } else if (form.tipo === PRIMITIVA.SALCHICHA) {
-    const axis = sub(form.b, form.a);
-    const bsis = basisFromAxis(axis);
-    const toCam = norm(sub(cam.eye, mix(form.a, form.b, 0.5)));
-    const side = norm(cross(norm(axis), toCam));
-    const upS = norm(cross(side, norm(axis)));
+    const axis = norm(sub(form.b, form.a));
+    const cerca = len(sub(cam.eye, form.a)) <= len(sub(cam.eye, form.b));
+    const p0 = cerca ? form.b : form.a;
+    const p1 = cerca ? form.a : form.b;
+    const dir = cerca ? mul(axis, -1) : axis;
+    const marco = (p) => {
+      const toCam = norm(sub(cam.eye, p));
+      const side = norm(cross(dir, toCam));
+      const fuera = norm(sub(dir, mul(toCam, dot(dir, toCam))));
+      return { toCam, side, fuera };
+    };
+    const m0 = marco(p0);
+    const m1 = marco(p1);
     const n = 24;
+    const k = 18;
     const outline = [];
     for (let i = 0; i <= n; i++) {
       const t = i / n;
-      outline.push(add(mix(form.a, form.b, t), mul(side, form.r)));
+      outline.push(add(mix(p0, p1, t), mul(norm(mix(m0.side, m1.side, t)), form.r)));
     }
-    for (let i = 0; i <= 16; i++) {
-      const a = -Math.PI / 2 + (i / 16) * Math.PI;
-      outline.push(add(form.b, add(mul(side, Math.cos(a) * form.r), mul(upS, Math.sin(a) * form.r))));
+    for (let i = 1; i <= k; i++) {
+      const a = (i / k) * Math.PI;
+      outline.push(add(p1, add(mul(m1.side, Math.cos(a) * form.r), mul(m1.fuera, Math.sin(a) * form.r))));
     }
-    for (let i = 0; i <= n; i++) {
+    for (let i = 1; i <= n; i++) {
       const t = 1 - i / n;
-      outline.push(add(mix(form.a, form.b, t), mul(side, -form.r)));
+      outline.push(add(mix(p0, p1, t), mul(norm(mix(m0.side, m1.side, t)), -form.r)));
     }
-    for (let i = 0; i <= 16; i++) {
-      const a = Math.PI / 2 + (i / 16) * Math.PI;
-      outline.push(add(form.a, add(mul(side, Math.cos(a) * form.r), mul(upS, Math.sin(a) * form.r))));
+    for (let i = 1; i <= k; i++) {
+      const a = Math.PI + (i / k) * Math.PI;
+      outline.push(add(p0, add(mul(m0.side, Math.cos(a) * form.r), mul(m0.fuera, Math.sin(a) * form.r))));
     }
-    outline.push(outline[0]);
     strokes.push({ tipo: "silueta", cerrado: true, puntos: proyectarPoly(cam, outline), hint: hintNombre[form.tipo], forma: form.tipo });
-    for (const t of [0.33, 0.67]) {
-      const c = mix(form.a, form.b, t);
-      const el = proyectarPoly(cam, circle3(c, axis, form.r, 40));
-      strokes.push({ tipo: "contorno", cerrado: true, puntos: el, hint: "Contorno sobre la salchicha", forma: form.tipo });
+    for (const t of [0.5, 0.82]) {
+      const c = mix(p0, p1, t);
+      const mc = marco(c);
+      const frente = norm(cross(mc.side, dir));
+      const arco = [];
+      for (let i = 0; i <= 28; i++) {
+        const a = (i / 28) * Math.PI;
+        arco.push(add(c, add(mul(mc.side, Math.cos(a) * form.r), mul(frente, Math.sin(a) * form.r))));
+      }
+      strokes.push({ tipo: "contorno", cerrado: false, puntos: proyectarPoly(cam, arco), hint: "Curva de contorno sobre la salchicha", forma: form.tipo });
     }
   }
   return strokes;

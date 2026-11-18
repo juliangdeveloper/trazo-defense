@@ -1,6 +1,6 @@
 import {
   APP_ID, APP_VERSION, SAVE_KEY, TECNICA, TECNICAS, TORRE, METRICA_PRINCIPAL, CAMINO, PUNTAJE,
-  JEFE, JEFES, JEFE_CAP2, COMPARA, PANTALLA, MODO, CAPITULO, CAPITULO_INFO, OLEADA, MEJORA, CAMARA_LENTA, ZONA_DIBUJO, COLA,
+  JEFE, JEFES, JEFE_CAP2, COMPARA, PANTALLA, MODO, CAPITULO, CAPITULO_INFO, OLEADA, MEJORA, CAMARA_LENTA, COLA,
   DEMO_JEFE, BATALLA_JEFE, PALMA, DESHACER, DESTELLO, DIMENSIONES, NIVEL_ATAQUE,
 } from "./config.js";
 import { metaUpdate, metaRead, crearEscritor, metaDeclararProyecto } from "./meta.js";
@@ -157,11 +157,7 @@ function ajustarCanvas(canvas) {
 
 const campo = $("#campo");
 const campoWrap = $("#campo-wrap");
-const zonaDibujo = $("#pad-wrap");
-zonaDibujo.style.top = `${ZONA_DIBUJO.ARRIBA * 100}%`;
-zonaDibujo.style.height = `${(ZONA_DIBUJO.ABAJO - ZONA_DIBUJO.ARRIBA) * 100}%`;
 const torresEl = $("#torres");
-torresEl.style.top = `${ZONA_DIBUJO.ABAJO * 100}%`;
 const pad = $("#pad");
 const lienzoDestello = $("#destello");
 let tamCampo = ajustarCanvas(campo);
@@ -1348,7 +1344,7 @@ function pintarCampo(ahora) {
     ctx.fillStyle = "rgba(31,29,43,0.55)";
     ctx.font = `${Math.round(13 * s)}px -apple-system, system-ui, sans-serif`;
     ctx.textAlign = "center";
-    ctx.fillText("Pulsa Oleada para empezar", w / 2, alto * ZONA_DIBUJO.ARRIBA * 0.62);
+    ctx.fillText("Pulsa Oleada para empezar", w / 2, Math.min(alto, torresEl.offsetTop) - 12 * s);
     ctx.textAlign = "start";
   }
 }
@@ -1733,7 +1729,7 @@ function danarJefe(dano) {
   const golpe = golpearJefe(ui.oleada, dano);
   if (golpe.dano > 0) {
     const pj = posJefe();
-    ui.proyectiles.push({ desde: { x: tamCampo.w / 2, y: tamCampo.h * ZONA_DIBUJO.ARRIBA }, hasta: pj, inicio: performance.now() });
+    ui.proyectiles.push({ desde: { x: tamCampo.w / 2, y: 0 }, hasta: pj, inicio: performance.now() });
     const desvio = ((ui.textos.length % 3) - 1) * BATALLA_JEFE.RADIO * escalaCampo();
     ui.textos.push({ x: pj.x + desvio, y: pj.y - BATALLA_JEFE.RADIO * escalaCampo() - 18 * escalaCampo(), texto: `−${golpe.dano}`, inicio: performance.now(), color: COLOR.TINTA });
   }

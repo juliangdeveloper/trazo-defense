@@ -1,5 +1,5 @@
 export const APP_ID = "trazo-defense";
-export const APP_VERSION = "0.3.1";
+export const APP_VERSION = "0.4.0";
 export const SAVE_KEY = "trazo-defense.save";
 export const SAVE_VERSION = 3;
 export const CACHE_PREFIX = "trazo-defense-";
@@ -299,11 +299,6 @@ export const OLEADA = Object.freeze({
 
 export const CAMARA_LENTA = Object.freeze({
   FACTOR: 0.3,
-});
-
-export const ZONA_DIBUJO = Object.freeze({
-  ARRIBA: 0.25,
-  ABAJO: 0.79,
 });
 
 export const COLA = Object.freeze({

@@ -727,17 +727,28 @@ export function evaluarGuia(puntos, guia, cerrado = false) {
 export function resumenInterseccion(resultados) {
   if (!resultados.length) return { puntaje: 0, desviacion_pct: 100, total: 0 };
   const puntaje = resultados.reduce((s, r) => s + r.puntaje, 0) / resultados.length;
-  const desviacion_pct = resultados.reduce((s, r) => s + (r.desviacion_pct || 0), 0) / resultados.length;
-  return { puntaje, desviacion_pct, total: resultados.length };
+  const media = (clave) => resultados.reduce((s, r) => s + (r[clave] || 0), 0) / resultados.length;
+  return { valido: true, puntaje, desviacion_pct: media("desviacion_pct"), extremos_pct: media("extremos_pct"), suavidad_deg: media("suavidad_deg"), total: resultados.length };
+}
+
+function muestrear(puntos, n = 24) {
+  if (puntos.length <= n) return puntos;
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(puntos[Math.round((i / (n - 1)) * (puntos.length - 1))]);
+  return out;
 }
 
 export function asignarPaso(puntos, pasos, usadas) {
   let mejor = -1, best = Infinity;
-  const cx = puntos.reduce((s, p) => s + p.x, 0) / puntos.length;
-  const cy = puntos.reduce((s, p) => s + p.y, 0) / puntos.length;
+  const traza = muestrear(puntos);
   pasos.forEach((paso, i) => {
-    if (usadas.includes(i)) return;
-    const d = distanciaAPolilinea({ x: cx, y: cy }, paso.puntos);
+    if (usadas.includes(i) || !paso.puntos || paso.puntos.length < 2) return;
+    const guia = muestrear(paso.puntos);
+    let ida = 0;
+    for (const p of traza) ida += distanciaAPolilinea(p, paso.puntos);
+    let vuelta = 0;
+    for (const q of guia) vuelta += distanciaAPolilinea(q, puntos);
+    const d = ida / traza.length + vuelta / guia.length;
     if (d < best) { best = d; mejor = i; }
   });
   return mejor;
